@@ -199,15 +199,15 @@ export const useConsultas = () => {
       // Save audio url
       await actualizarConsulta(consultaId, { audioUrl: downloadUrl });
 
-      // 3. Transcribe audio using Whisper
+      // 3. Transcribe audio using Gemini
       let transcriptionText = '';
       try {
-        console.log('[VetIA] Paso 3: Llamando a Whisper para transcripción...');
+        console.log('[VetIA] Paso 3: Llamando a Gemini para transcripción...');
         transcriptionText = await transcribeAudio(audioBlob);
         console.log('[VetIA] Transcripción:', transcriptionText);
         await actualizarConsulta(consultaId, { transcripcion: transcriptionText });
       } catch (txErr) {
-        console.error('[VetIA] Error en paso 3 (Whisper):', txErr);
+        console.error('[VetIA] Error en paso 3 (Gemini):', txErr);
         await actualizarConsulta(consultaId, {
           estado: 'error',
           transcripcion: 'Error durante la transcripción del audio.'
