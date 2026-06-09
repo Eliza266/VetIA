@@ -8,7 +8,8 @@ import {
   getDoc, 
   addDoc, 
   updateDoc, 
-  orderBy 
+  orderBy,
+  deleteDoc
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../services/firebase';
@@ -170,6 +171,18 @@ export const useConsultas = () => {
     }
   };
 
+  const eliminarConsulta = async (id: string): Promise<boolean> => {
+    setError(null);
+    try {
+      const docRef = doc(db, 'consultas', id);
+      await deleteDoc(docRef);
+      return true;
+    } catch (err: any) {
+      console.error('Error deleting consultation:', err);
+      setError('Error al eliminar la consulta.');
+      return false;
+    }
+
   /**
    * Process recorded audio: Uploads to Firebase storage, transcribes with Whisper, and structures SOAP with Gemini.
    */
@@ -250,6 +263,7 @@ export const useConsultas = () => {
     getConsulta,
     crearConsulta,
     actualizarConsulta,
+    eliminarConsulta,
     procesarAudioConsulta
   };
 };

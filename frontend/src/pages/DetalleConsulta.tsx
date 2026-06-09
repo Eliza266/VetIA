@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useConsultas } from '../hooks/useConsultas';
 import { usePacientes } from '../hooks/usePacientes';
 import type { Consulta, Paciente, SOAP } from '../types';
@@ -9,20 +9,25 @@ import {
   FileAudio, 
   FileText, 
   CheckCircle2, 
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  Download
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 
 const DetalleConsulta: React.FC = () => {
   const { pacienteId, consultaId } = useParams<{ pacienteId: string; consultaId: string }>();
+  const navigate = useNavigate();
   
   const { getPaciente } = usePacientes();
-  const { getConsulta, actualizarConsulta, error: apiError } = useConsultas();
+  const { getConsulta, actualizarConsulta, eliminarConsulta, error: apiError } = useConsultas();
 
   const [consulta, setConsulta] = useState<Consulta | null>(null);
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -79,6 +84,103 @@ const DetalleConsulta: React.FC = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!consultaId || !pacienteId) return;
+    const confirmDelete = window.confirm('¿Estás seguro de que deseas eliminar esta consulta de forma permanente? Esta acción no se puede deshacer.');
+    if (!confirmDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const ok = await eliminarConsulta(consultaId);
+      if (ok) {
+        navigate(`/pacientes/${pacienteId}`);
+      } else {
+        throw new Error('No se pudo eliminar la consulta.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Error al eliminar la consulta.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    if (!consulta || !paciente) return;
+    
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.setTextColor(15, 110, 86); // #0F6E56
+    doc.text("VetIA - Reporte Clínico Veterinario", 14, 20);
+    
+    // Divider line
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, 25, 196, 25);
+    
+    // Patient metadata
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    
+    doc.text(`Paciente: ${paciente.nombre}`, 14, 32);
+    doc.text(`Especie: ${paciente.especie} (${paciente.raza || 'Mestizo'})`, 14, 38);
+    doc.text(`Propietario: ${paciente.propietario.nombre} (${paciente.propietario.telefono})`, 14, 44);
+    
+    const fechaText = new Date(consulta.fechaHora).toLocaleDateString() + ' ' + new Date(consulta.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    doc.text(`Fecha Consulta: ${fechaText}`, 120, 32);
+    doc.text(`Expediente ID: ${paciente.id}`, 120, 38);
+    doc.text(`ID Consulta: ${consulta.id}`, 120, 44);
+    
+    doc.line(14, 48, 196, 48);
+    
+    // SOAP content
+    let currentY = 56;
+    const soap = consulta.soap || { subjetivo: '', objetivo: '', analisis: '', plan: '' };
+    
+    const sections = [
+      { title: "SUBJETIVO (S)", text: soap.subjetivo },
+      { title: "OBJETIVO (O)", text: soap.objetivo },
+      { title: "ANÁLISIS (A)", text: soap.analisis },
+      { title: "PLAN (P)", text: soap.plan }
+    ];
+    
+    sections.forEach((section) => {
+      // Header for section
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(15, 110, 86);
+      doc.text(section.title, 14, currentY);
+      
+      currentY += 6;
+      
+      // Text body
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(51, 65, 85);
+      
+      // Split text to fit page width (182 mm max)
+      const lines = doc.splitTextToSize(section.text || "No reportado en la consulta", 182);
+      
+      lines.forEach((line: string) => {
+        if (currentY > 280) {
+          doc.addPage();
+          currentY = 20; // reset margin on new page
+        }
+        doc.text(line, 14, currentY);
+        currentY += 5;
+      });
+      
+      currentY += 6; // spacing between sections
+    });
+    
+    // Save the PDF
+    const filename = `consulta_${paciente.nombre.toLowerCase()}_${new Date(consulta.fechaHora).toISOString().slice(0,10)}.pdf`;
+    doc.save(filename);
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -123,16 +225,39 @@ const DetalleConsulta: React.FC = () => {
           </div>
         </div>
 
-        {consulta.estado !== 'aprobada' && consulta.soap && (
-          <button
-            onClick={handleApprove}
-            disabled={isApproving}
-            className="flex items-center gap-2 rounded-xl bg-[#0F6E56] hover:bg-[#0c5945] px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-[#0F6E56]/15 transition-all disabled:opacity-50"
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            {isApproving ? 'Aprobando...' : 'Aprobar Consulta'}
-          </button>
-        )}
+        <div className="flex items-center gap-2.5 self-stretch sm:self-auto">
+          {consulta.estado === 'borrador' && (
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="flex items-center justify-center gap-2 rounded-xl bg-red-50 hover:bg-red-100 border border-red-100 px-4 py-2.5 text-sm font-bold text-red-600 transition-all disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              {isDeleting ? 'Eliminando...' : 'Eliminar'}
+            </button>
+          )}
+
+          {consulta.estado === 'aprobada' && (
+            <button
+              onClick={handleDownloadPDF}
+              className="flex items-center justify-center gap-2 rounded-xl bg-[#0F6E56]/10 hover:bg-[#0F6E56]/20 border border-[#0F6E56]/10 px-4 py-2.5 text-sm font-bold text-[#0F6E56] transition-all"
+            >
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </button>
+          )}
+
+          {consulta.estado !== 'aprobada' && consulta.soap && (
+            <button
+              onClick={handleApprove}
+              disabled={isApproving}
+              className="flex items-center justify-center gap-2 rounded-xl bg-[#0F6E56] hover:bg-[#0c5945] px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-[#0F6E56]/15 transition-all disabled:opacity-50"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              {isApproving ? 'Aprobando...' : 'Aprobar Consulta'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Grid */}
@@ -216,7 +341,7 @@ const DetalleConsulta: React.FC = () => {
               </div>
             </div>
           ) : (
-            <SoapViewer soap={consulta.soap} onSave={handleSaveSoap} />
+            <SoapViewer soap={consulta.soap} onSave={consulta.estado === 'borrador' ? handleSaveSoap : undefined} />
           )}
         </div>
       </div>

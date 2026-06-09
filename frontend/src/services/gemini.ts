@@ -12,17 +12,22 @@ export const generateSOAP = async (transcription: string): Promise<SOAP> => {
     throw new Error('Gemini API Key no configurada en las variables de entorno.');
   }
 
-  const prompt = `
-Eres un asistente veterinario experto de VetIA. Tu tarea es analizar la transcripción de una consulta clínica veterinaria y estructurarla en el formato SOAP (Subjetivo, Objetivo, Análisis, Plan) en idioma español.
+  const prompt = `Eres un asistente clínico veterinario experto. Analiza la siguiente transcripción de una consulta veterinaria y genera una nota clínica estructurada en formato SOAP en español.
 
-La estructura debe ser la siguiente:
-- Subjetivo (S): Motivo de consulta, historia clínica contada por el dueño, síntomas reportados, actitud del paciente, etc.
-- Objetivo (O): Resultados del examen físico, constantes fisiológicas (frecuencia cardíaca, respiratoria, temperatura, peso), hallazgos medibles u observables.
-- Análisis (A): Diagnóstico presuntivo, diagnósticos diferenciales, evaluación clínica basada en S y O.
-- Plan (P): Tratamiento médico, dosis recomendadas, exámenes complementarios solicitados, recomendaciones para el hogar y fecha de próxima revisión.
+INSTRUCCIONES IMPORTANTES:
+- Usa ÚNICAMENTE la información presente en la transcripción
+- No inventes datos que no se mencionaron
+- Usa terminología veterinaria clínica apropiada
+- Si no hay información para un campo, escribe "No reportado en la consulta"
+- Sé conciso pero completo
 
-Por favor, devuelve el resultado ÚNICAMENTE como un objeto JSON válido con las siguientes propiedades: "subjetivo", "objetivo", "analisis" y "plan".
-No agregues comentarios ni explicaciones adicionales. No envuelvas el JSON en bloques markdown (como \`\`\`json). Devuelve únicamente la cadena JSON pura.
+Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
+{
+  "subjetivo": "motivo de consulta, síntomas reportados por el propietario, historia clínica",
+  "objetivo": "hallazgos del examen físico, constantes vitales, peso, temperatura",
+  "analisis": "diagnóstico presuntivo o diferencial basado en los datos",
+  "plan": "tratamiento, medicamentos con dosis, recomendaciones, próxima cita"
+}
 
 Transcripción de la consulta:
 "${transcription}"
