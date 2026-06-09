@@ -1,35 +1,46 @@
-import axios from 'axios';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-/**
- * Transcribes an audio blob using OpenAI's Whisper API.
- * @param audioBlob The recorded audio blob (usually webm or wav)
- * @returns The transcribed text
- */
 export const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API Key no configurada en las variables de entorno.');
+  const base64Audio = await blobToBase64(audioBlob);
+  const base64Data = base64Audio.split(',')[1];
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            {
+              inline_data: {
+                mime_type: 'audio/webm',
+                data: base64Data
+              }
+            },
+            {
+              text: 'Transcribe exactamente lo que se dice en este audio de una consulta veterinaria. Solo devuelve la transcripción, sin comentarios adicionales.'
+            }
+          ]
+        }]
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Error en transcripción: ${JSON.stringify(error)}`);
   }
 
-  const formData = new FormData();
-  // Whisper accepts webm, mp3, wav, m4a, etc.
-  // We use webm as default for MediaRecorder output
-  formData.append('file', audioBlob, 'audio.webm');
-  formData.append('model', 'whisper-1');
-  formData.append('language', 'es'); // Default to Spanish for VetIA
-
-  try {
-    const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', formData, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-
-    return response.data.text || '';
-  } catch (error: any) {
-    console.error('Error in Whisper transcription:', error);
-    const details = error.response?.data?.error?.message || error.message;
-    throw new Error(`Error al transcribir el audio: ${details}`);
-  }
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
 };
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}

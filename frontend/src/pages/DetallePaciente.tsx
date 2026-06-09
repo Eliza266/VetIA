@@ -3,23 +3,23 @@ import { useParams, Link } from 'react-router-dom';
 import { usePacientes } from '../hooks/usePacientes';
 import { useConsultas } from '../hooks/useConsultas';
 import type { Paciente, Consulta } from '../types';
-import { 
-  ArrowLeft, 
-  Plus, 
-  Phone, 
-  Mail, 
-  User, 
-  FileText, 
-  ShieldAlert, 
+import {
+  ArrowLeft,
+  Plus,
+  Phone,
+  Mail,
+  User,
+  FileText,
+  ShieldAlert,
   Info,
   ChevronRight
 } from 'lucide-react';
 
 const DetallePaciente: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  
-  const { getPaciente, loading: loadingPaciente } = usePacientes();
-  const { fetchConsultasPorPaciente, loading: loadingConsultas } = useConsultas();
+
+  const { getPaciente } = usePacientes();
+  const { fetchConsultasPorPaciente } = useConsultas();
 
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [consultasPaciente, setConsultasPaciente] = useState<Consulta[]>([]);
@@ -27,21 +27,31 @@ const DetallePaciente: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      if (id) {
-        setLoadingGeneral(true);
+      if (!id) {
+        setLoadingGeneral(false);
+        return;
+      }
+      setLoadingGeneral(true);
+      try {
         const pacData = await getPaciente(id);
         if (pacData) {
           setPaciente(pacData);
-          const consData = await fetchConsultasPorPaciente(id);
-          setConsultasPaciente(consData || []);
+          try {
+            const consData = await fetchConsultasPorPaciente(id);
+            setConsultasPaciente(consData || []);
+          } catch {
+            // Consultation fetch failed (e.g. missing index) — show empty list
+            setConsultasPaciente([]);
+          }
         }
+      } finally {
         setLoadingGeneral(false);
       }
     };
     loadData();
-  }, [id, getPaciente, fetchConsultasPorPaciente]);
+  }, [id]);
 
-  if (loadingPaciente || loadingConsultas || loadingGeneral) {
+  if (loadingGeneral) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -128,7 +138,7 @@ const DetallePaciente: React.FC = () => {
           {/* Pet Details Card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 text-sm border-b border-slate-50 pb-2">Datos Fisiológicos</h3>
-            
+
             <div className="space-y-3 text-sm">
               <div className="flex justify-between py-1 border-b border-slate-50/50">
                 <span className="text-slate-400 font-medium">Especie</span>
@@ -162,7 +172,7 @@ const DetallePaciente: React.FC = () => {
           {/* Owner details card */}
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 text-sm border-b border-slate-50 pb-2">Información del Propietario</h3>
-            
+
             <div className="space-y-4">
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
@@ -232,15 +242,14 @@ const DetallePaciente: React.FC = () => {
                 {consultasPaciente.map((consulta) => (
                   <div key={consulta.id} className="relative group">
                     {/* Circle icon on the timeline */}
-                    <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-white ${
-                      consulta.estado === 'aprobada' 
-                        ? 'bg-emerald-500' 
-                        : consulta.estado === 'procesando' 
-                        ? 'bg-amber-500 animate-pulse'
-                        : consulta.estado === 'error'
-                        ? 'bg-red-500'
-                        : 'bg-slate-400'
-                    }`}></span>
+                    <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-white ${consulta.estado === 'aprobada'
+                        ? 'bg-emerald-500'
+                        : consulta.estado === 'procesando'
+                          ? 'bg-amber-500 animate-pulse'
+                          : consulta.estado === 'error'
+                            ? 'bg-red-500'
+                            : 'bg-slate-400'
+                      }`}></span>
 
                     <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/30 group-hover:bg-slate-50 group-hover:border-slate-200 transition-all">
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
@@ -253,17 +262,16 @@ const DetallePaciente: React.FC = () => {
                             {new Date(consulta.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        
+
                         {/* State indicator tag */}
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                          consulta.estado === 'aprobada' 
-                            ? 'bg-emerald-50 text-emerald-700' 
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${consulta.estado === 'aprobada'
+                            ? 'bg-emerald-50 text-emerald-700'
                             : consulta.estado === 'procesando'
-                            ? 'bg-amber-50 text-amber-700 animate-pulse'
-                            : consulta.estado === 'error'
-                            ? 'bg-red-50 text-red-700'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}>
+                              ? 'bg-amber-50 text-amber-700 animate-pulse'
+                              : consulta.estado === 'error'
+                                ? 'bg-red-50 text-red-700'
+                                : 'bg-slate-100 text-slate-600'
+                          }`}>
                           {consulta.estado === 'aprobada' ? 'Completado' : consulta.estado === 'procesando' ? 'Procesando con IA' : consulta.estado === 'error' ? 'Error' : 'Borrador'}
                         </span>
                       </div>

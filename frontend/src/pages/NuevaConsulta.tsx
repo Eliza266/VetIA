@@ -7,9 +7,9 @@ import AudioRecorder from '../components/AudioRecorder';
 import { ArrowLeft, AlertCircle, Sparkles, HelpCircle } from 'lucide-react';
 
 const NuevaConsulta: React.FC = () => {
-  const { id: pacienteId } = useParams<{ id: string }>();
+  const { pacienteId } = useParams<{ pacienteId: string }>();
   const navigate = useNavigate();
-  
+
   const { getPaciente, loading: loadingPaciente } = usePacientes();
   const { crearConsulta, procesarAudioConsulta, error: apiError } = useConsultas();
 
@@ -41,7 +41,7 @@ const NuevaConsulta: React.FC = () => {
 
       // 2. Upload, transcribe and generate SOAP structure
       const success = await procesarAudioConsulta(newConsultaId, audioBlob);
-      
+
       if (success) {
         // Redirect to details of this consultation
         navigate(`/pacientes/${pacienteId}/consultas/${newConsultaId}`);
@@ -112,14 +112,14 @@ const NuevaConsulta: React.FC = () => {
         <div className="md:col-span-2">
           <AudioRecorder onAudioRecorded={handleAudioRecorded} isProcessing={isProcessing} />
         </div>
-        
+
         {/* Instructions Card */}
         <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm space-y-4">
           <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-2">
             <HelpCircle className="h-4 w-4 text-[#0F6E56]" />
             ¿Cómo funciona?
           </h3>
-          
+
           <ul className="space-y-3.5 text-xs text-slate-500">
             <li className="flex gap-2">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-50 text-[10px] font-bold text-[#0F6E56] shrink-0">1</span>

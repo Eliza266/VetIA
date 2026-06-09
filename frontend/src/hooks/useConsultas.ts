@@ -174,18 +174,27 @@ export const useConsultas = () => {
    * Process recorded audio: Uploads to Firebase storage, transcribes with Whisper, and structures SOAP with Gemini.
    */
   const procesarAudioConsulta = async (consultaId: string, audioBlob: Blob): Promise<boolean> => {
-    if (!user) return false;
+    if (!user) {
+      console.error('[VetIA] Error en paso 0: Usuario no autenticado');
+      return false;
+    }
     setError(null);
-    
+
+    console.log('[VetIA] Iniciando procesamiento de audio para consulta:', consultaId);
+    console.log('[VetIA] Tamaño del audio blob:', audioBlob.size, 'bytes, tipo:', audioBlob.type);
+
     try {
       // 1. Set status to processing
+      console.log('[VetIA] Paso 1: Marcando consulta como "procesando"...');
       await actualizarConsulta(consultaId, { estado: 'procesando' });
 
       // 2. Upload to Storage: audios/{veterinarioId}/{consultaId}
       const audioPath = `audios/${user.uid}/${consultaId}.webm`;
+      console.log('[VetIA] Paso 2: Subiendo audio a Storage...', audioPath);
       const storageRef = ref(storage, audioPath);
       const uploadResult = await uploadBytes(storageRef, audioBlob);
       const downloadUrl = await getDownloadURL(uploadResult.ref);
+      console.log('[VetIA] Audio subido:', downloadUrl);
 
       // Save audio url
       await actualizarConsulta(consultaId, { audioUrl: downloadUrl });
@@ -193,35 +202,40 @@ export const useConsultas = () => {
       // 3. Transcribe audio using Whisper
       let transcriptionText = '';
       try {
+        console.log('[VetIA] Paso 3: Llamando a Whisper para transcripción...');
         transcriptionText = await transcribeAudio(audioBlob);
+        console.log('[VetIA] Transcripción:', transcriptionText);
         await actualizarConsulta(consultaId, { transcripcion: transcriptionText });
       } catch (txErr) {
-        console.error('Whisper transcription failed:', txErr);
-        await actualizarConsulta(consultaId, { 
-          estado: 'error', 
-          transcripcion: 'Error durante la transcripción del audio.' 
+        console.error('[VetIA] Error en paso 3 (Whisper):', txErr);
+        await actualizarConsulta(consultaId, {
+          estado: 'error',
+          transcripcion: 'Error durante la transcripción del audio.'
         });
         throw txErr;
       }
 
       // 4. Generate SOAP using Gemini
       try {
+        console.log('[VetIA] Paso 4: Llamando a Gemini para generar SOAP...');
         const soapResult = await generateSOAP(transcriptionText);
-        await actualizarConsulta(consultaId, { 
+        console.log('[VetIA] SOAP generado:', soapResult);
+        await actualizarConsulta(consultaId, {
           soap: soapResult,
           estado: 'borrador' // Default to draft for veterinarian review
         });
       } catch (geminiErr) {
-        console.error('Gemini SOAP generation failed:', geminiErr);
-        await actualizarConsulta(consultaId, { 
+        console.error('[VetIA] Error en paso 4 (Gemini):', geminiErr);
+        await actualizarConsulta(consultaId, {
           estado: 'error'
         });
         throw geminiErr;
       }
 
+      console.log('[VetIA] ✅ Procesamiento completo para consulta:', consultaId);
       return true;
     } catch (err: any) {
-      console.error('Error in complete audio processing flow:', err);
+      console.error('[VetIA] Error general en pipeline de audio:', err);
       setError(err.message || 'Error al procesar el audio e IA.');
       return false;
     }
