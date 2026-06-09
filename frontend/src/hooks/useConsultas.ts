@@ -1,13 +1,13 @@
 import { useState, useCallback } from 'react';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  addDoc, 
-  updateDoc, 
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+  addDoc,
+  updateDoc,
   orderBy,
   deleteDoc
 } from 'firebase/firestore';
@@ -35,7 +35,7 @@ export const useConsultas = () => {
         where('veterinarioId', '==', user.uid),
         orderBy('fechaHora', 'desc')
       );
-      
+
       const querySnapshot = await getDocs(q);
       const list: Consulta[] = [];
       querySnapshot.forEach((doc) => {
@@ -73,7 +73,7 @@ export const useConsultas = () => {
         where('veterinarioId', '==', user.uid),
         orderBy('fechaHora', 'desc')
       );
-      
+
       const querySnapshot = await getDocs(q);
       const list: Consulta[] = [];
       querySnapshot.forEach((doc) => {
@@ -108,7 +108,7 @@ export const useConsultas = () => {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        
+
         // Security check
         if (data.veterinarioId !== user?.uid) {
           throw new Error('No tienes permiso para acceder a esta consulta.');
@@ -148,7 +148,7 @@ export const useConsultas = () => {
         estado: 'borrador',
         creadoEn: new Date()
       };
-      
+
       const docRef = await addDoc(collection(db, 'consultas'), nuevaConsulta);
       return docRef.id;
     } catch (err: any) {
@@ -182,7 +182,7 @@ export const useConsultas = () => {
       setError('Error al eliminar la consulta.');
       return false;
     }
-
+  };
   /**
    * Process recorded audio: Uploads to Firebase storage, transcribes with Whisper, and structures SOAP with Gemini.
    */

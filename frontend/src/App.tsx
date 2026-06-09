@@ -10,6 +10,8 @@ import NuevosPaciente from './pages/NuevosPaciente';
 import DetallePaciente from './pages/DetallePaciente';
 import NuevaConsulta from './pages/NuevaConsulta';
 import DetalleConsulta from './pages/DetalleConsulta';
+import Perfil from './pages/Perfil';
+import Agenda from './pages/Agenda';
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
               <Route path="/pacientes/:id" element={<DetallePaciente />} />
               <Route path="/pacientes/:pacienteId/consultas/nueva" element={<NuevaConsulta />} />
               <Route path="/pacientes/:pacienteId/consultas/:consultaId" element={<DetalleConsulta />} />
+              <Route path="/perfil" element={<Perfil />} />
+              <Route path="/agenda" element={<Agenda />} />
             </Route>
           </Route>
         </Routes>

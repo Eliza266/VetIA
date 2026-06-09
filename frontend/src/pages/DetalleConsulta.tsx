@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useConsultas } from '../hooks/useConsultas';
 import { usePacientes } from '../hooks/usePacientes';
+import { useAuth } from '../hooks/useAuth';
 import type { Consulta, Paciente, SOAP } from '../types';
 import SoapViewer from '../components/SoapViewer';
 import { 
@@ -11,13 +12,15 @@ import {
   CheckCircle2, 
   AlertCircle,
   Trash2,
-  Download
+  Download,
+  Sparkles
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 const DetalleConsulta: React.FC = () => {
   const { pacienteId, consultaId } = useParams<{ pacienteId: string; consultaId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   const { getPaciente } = usePacientes();
   const { getConsulta, actualizarConsulta, eliminarConsulta, error: apiError } = useConsultas();
@@ -86,7 +89,7 @@ const DetalleConsulta: React.FC = () => {
 
   const handleDelete = async () => {
     if (!consultaId || !pacienteId) return;
-    const confirmDelete = window.confirm('¿Estás seguro de que deseas eliminar esta consulta de forma permanente? Esta acción no se puede deshacer.');
+    const confirmDelete = window.confirm('¿Estás seguro de eliminar esta consulta? Esta acción no se puede deshacer.');
     if (!confirmDelete) return;
 
     setIsDeleting(true);
@@ -105,41 +108,103 @@ const DetalleConsulta: React.FC = () => {
     }
   };
 
+  const handleAddMedToPlan = async (med: any) => {
+    if (!consulta || !consulta.soap) return;
+    
+    const currentPlan = consulta.soap.plan || '';
+    const medLine = `• ${med.nombre} | ${med.dosis} | ${med.via} | ${med.frecuencia} | ${med.duracion}`;
+    const newPlan = currentPlan ? `${currentPlan}\n${medLine}` : medLine;
+    
+    await handleSaveSoap({
+      ...consulta.soap,
+      plan: newPlan
+    });
+  };
+
   const handleDownloadPDF = () => {
-    if (!consulta || !paciente) return;
+    if (!consulta || !paciente || !user) return;
     
     const doc = new jsPDF();
     
-    // Title
+    // 1. Header (Green background header #0F6E56)
+    doc.setFillColor(15, 110, 86);
+    doc.rect(0, 0, 210, 30, 'F');
+    
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(15, 110, 86); // #0F6E56
-    doc.text("VetIA - Reporte Clínico Veterinario", 14, 20);
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text("VetIA - Historia Clínica", 14, 20);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const exportDate = new Date().toLocaleDateString();
+    doc.text(`Fecha de Exportación: ${exportDate}`, 150, 20);
+    
+    // 2. Veterinarian Details
+    let currentY = 42;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 110, 86);
+    doc.text("DATOS DEL VETERINARIO", 14, currentY);
+    
+    currentY += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Nombre: ${user.nombre}`, 14, currentY);
+    doc.text(`Email: ${user.email}`, 120, currentY);
+    
+    currentY += 10;
     
     // Divider line
     doc.setDrawColor(226, 232, 240);
-    doc.line(14, 25, 196, 25);
+    doc.line(14, currentY - 2, 196, currentY - 2);
     
-    // Patient metadata
-    doc.setFontSize(10);
+    // 3. Patient Details
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 110, 86);
+    doc.text("DATOS DEL PACIENTE", 14, currentY);
+    
+    currentY += 6;
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Nombre: ${paciente.nombre}`, 14, currentY);
+    doc.text(`Especie: ${paciente.especie}`, 70, currentY);
+    doc.text(`Raza: ${paciente.raza || 'No reportada'}`, 120, currentY);
+    doc.text(`Sexo: ${paciente.sexo === 'macho' ? 'Macho' : 'Hembra'}`, 170, currentY);
     
-    doc.text(`Paciente: ${paciente.nombre}`, 14, 32);
-    doc.text(`Especie: ${paciente.especie} (${paciente.raza || 'Mestizo'})`, 14, 38);
-    doc.text(`Propietario: ${paciente.propietario.nombre} (${paciente.propietario.telefono})`, 14, 44);
+    currentY += 6;
+    doc.text(`Propietario: ${paciente.propietario.nombre}`, 14, currentY);
+    doc.text(`Teléfono: ${paciente.propietario.telefono}`, 120, currentY);
     
+    currentY += 10;
+    
+    // Divider line
+    doc.line(14, currentY - 2, 196, currentY - 2);
+    
+    // 4. Consultation Details
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 110, 86);
+    doc.text("DETALLES DE LA CONSULTA", 14, currentY);
+    
+    currentY += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
     const fechaText = new Date(consulta.fechaHora).toLocaleDateString() + ' ' + new Date(consulta.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    doc.text(`Fecha Consulta: ${fechaText}`, 120, 32);
-    doc.text(`Expediente ID: ${paciente.id}`, 120, 38);
-    doc.text(`ID Consulta: ${consulta.id}`, 120, 44);
+    doc.text(`Fecha y Hora: ${fechaText}`, 14, currentY);
+    doc.text(`ID Registro: ${consulta.id}`, 120, currentY);
     
-    doc.line(14, 48, 196, 48);
+    currentY += 10;
     
-    // SOAP content
-    let currentY = 56;
+    // Divider line
+    doc.line(14, currentY - 2, 196, currentY - 2);
+    
+    // 5. SOAP sections
     const soap = consulta.soap || { subjetivo: '', objetivo: '', analisis: '', plan: '' };
-    
     const sections = [
       { title: "SUBJETIVO (S)", text: soap.subjetivo },
       { title: "OBJETIVO (O)", text: soap.objetivo },
@@ -148,36 +213,92 @@ const DetalleConsulta: React.FC = () => {
     ];
     
     sections.forEach((section) => {
-      // Header for section
+      if (currentY > 260) {
+        doc.addPage();
+        currentY = 25;
+      }
+      
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setTextColor(15, 110, 86);
       doc.text(section.title, 14, currentY);
       
       currentY += 6;
       
-      // Text body
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      doc.setTextColor(51, 65, 85);
+      doc.setTextColor(0, 0, 0);
       
-      // Split text to fit page width (182 mm max)
       const lines = doc.splitTextToSize(section.text || "No reportado en la consulta", 182);
-      
       lines.forEach((line: string) => {
         if (currentY > 280) {
           doc.addPage();
-          currentY = 20; // reset margin on new page
+          currentY = 25;
         }
         doc.text(line, 14, currentY);
         currentY += 5;
       });
       
-      currentY += 6; // spacing between sections
+      currentY += 5;
     });
     
+    currentY += 5;
+    
+    // Divider line
+    if (currentY > 260) {
+      doc.addPage();
+      currentY = 25;
+    }
+    doc.line(14, currentY - 2, 196, currentY - 2);
+    
+    // 6. Receta Médica Section
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 110, 86);
+    doc.text("RECETA MÉDICA", 14, currentY);
+    
+    currentY += 8;
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    
+    const planText = soap.plan || '';
+    const medLines = planText.split('\n')
+      .map(l => l.replace(/^[\s*\-•]+/, '').trim())
+      .filter(l => l.split('|').length >= 3); // Must have at least name, dose, via, freq...
+      
+    if (medLines.length > 0) {
+      medLines.forEach((medLine) => {
+        if (currentY > 280) {
+          doc.addPage();
+          currentY = 25;
+        }
+        doc.text(`• ${medLine}`, 14, currentY);
+        currentY += 6;
+      });
+    } else {
+      doc.setFont("helvetica", "italic");
+      doc.text("No se prescribieron medicamentos en esta consulta.", 14, currentY);
+      currentY += 6;
+    }
+    
+    // 7. Page footers for all pages
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, 282, 196, 282);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Documento generado por VetIA • Vet. ${user.nombre}`, 14, 288);
+      doc.text(`Página ${i} de ${pageCount}`, 180, 288);
+    }
+    
     // Save the PDF
-    const filename = `consulta_${paciente.nombre.toLowerCase()}_${new Date(consulta.fechaHora).toISOString().slice(0,10)}.pdf`;
+    const filename = `consulta_${paciente.nombre.toLowerCase()}_${new Date(consulta.fechaHora).toISOString().slice(0, 10)}.pdf`;
     doc.save(filename);
   };
 
@@ -185,7 +306,7 @@ const DetalleConsulta: React.FC = () => {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#0F6E56] border-t-transparent"></div>
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#0F6E56] border-t-transparent mx-auto"></div>
           <p className="text-sm font-semibold text-slate-500 animate-pulse">Cargando consulta...</p>
         </div>
       </div>
@@ -196,7 +317,7 @@ const DetalleConsulta: React.FC = () => {
     return (
       <div className="max-w-md mx-auto text-center py-12 bg-white rounded-2xl border border-slate-100 p-8 shadow-sm">
         <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-lg font-bold text-slate-800 mb-2">Error al cargar consulta</h3>
+        <h3 className="text-lg font-bold text-slate-800 mb-2">Error al cargar</h3>
         <p className="text-sm text-slate-500 mb-6">{error || apiError || 'No se encontró el registro clínico.'}</p>
         <Link to="/pacientes" className="px-4 py-2.5 rounded-xl bg-[#0F6E56] text-white text-sm font-bold">
           Volver a Pacientes
@@ -328,7 +449,7 @@ const DetalleConsulta: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column - SOAP note (SoapViewer) */}
+        {/* Right Column - SOAP note (SoapViewer) & Suggestions */}
         <div className="lg:col-span-2">
           {consulta.estado === 'procesando' ? (
             <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center shadow-sm space-y-4">
@@ -341,7 +462,53 @@ const DetalleConsulta: React.FC = () => {
               </div>
             </div>
           ) : (
-            <SoapViewer soap={consulta.soap} onSave={consulta.estado === 'borrador' ? handleSaveSoap : undefined} />
+            <>
+              <SoapViewer soap={consulta.soap} onSave={consulta.estado === 'borrador' ? handleSaveSoap : undefined} />
+              
+              {/* Sugerencias de IA section */}
+              {consulta.soap?.medicamentosSugeridos && consulta.soap.medicamentosSugeridos.length > 0 && (consulta.estado === 'borrador' || consulta.estado === 'aprobada') && (
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4 mt-6">
+                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-2">
+                    <Sparkles className="h-4.5 w-4.5 text-[#0F6E56]" />
+                    Sugerencias de IA
+                  </h3>
+                  
+                  <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 p-4 rounded-xl text-amber-800 text-xs font-semibold">
+                    <AlertCircle className="h-4.5 w-4.5 shrink-0 text-amber-600 mt-0.5" />
+                    <span>Estas son sugerencias generadas por IA. El veterinario debe validar antes de prescribir.</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {consulta.soap.medicamentosSugeridos.map((med, index) => (
+                      <div key={index} className="bg-slate-50/50 hover:bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-base mb-2">{med.nombre}</h4>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 mb-3">
+                            <div><span className="font-semibold text-slate-600">Dosis:</span> {med.dosis}</div>
+                            <div><span className="font-semibold text-slate-600">Vía:</span> {med.via}</div>
+                            <div><span className="font-semibold text-slate-600">Frecuencia:</span> {med.frecuencia}</div>
+                            <div><span className="font-semibold text-slate-600">Duración:</span> {med.duracion}</div>
+                          </div>
+                          <div className="text-xs text-slate-600 bg-white border border-slate-100 p-2.5 rounded-lg italic">
+                            <span className="font-semibold text-slate-700 not-italic block mb-0.5">Indicación:</span>
+                            {med.indicacion}
+                          </div>
+                        </div>
+                        
+                        {consulta.estado === 'borrador' && (
+                          <button
+                            onClick={() => handleAddMedToPlan(med)}
+                            className="mt-4 w-full py-2 bg-[#0F6E56]/10 hover:bg-[#0F6E56] text-[#0F6E56] hover:text-white rounded-xl text-xs font-bold transition-all border border-[#0F6E56]/20"
+                          >
+                            Agregar al Plan
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

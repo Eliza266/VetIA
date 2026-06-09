@@ -26,11 +26,21 @@ export interface Paciente {
   creadoEn: Date;
 }
 
+export interface MedicamentoSugerido {
+  nombre: string;
+  dosis: string;
+  via: string;
+  frecuencia: string;
+  duracion: string;
+  indicacion: string;
+}
+
 export interface SOAP {
   subjetivo: string;
   objetivo: string;
   analisis: string;
   plan: string;
+  medicamentosSugeridos?: MedicamentoSugerido[];
 }
 
 export interface Consulta {
@@ -42,5 +52,18 @@ export interface Consulta {
   transcripcion?: string;
   soap?: SOAP;
   estado: 'procesando' | 'borrador' | 'aprobada' | 'error';
+  creadoEn: Date;
+}
+
+export interface Cita {
+  id?: string;
+  pacienteId: string;
+  nombrePaciente: string;
+  veterinarioId: string;
+  fecha: string; // YYYY-MM-DD
+  horaInicio: string; // HH:MM
+  duracion: number; // 15, 30, 45, 60
+  motivo: string;
+  estado: 'programada' | 'realizada' | 'cancelada';
   creadoEn: Date;
 }

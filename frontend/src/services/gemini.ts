@@ -14,22 +14,19 @@ export const generateSOAP = async (transcription: string): Promise<SOAP> => {
 
   const prompt = `Eres un asistente clínico veterinario experto. Analiza la siguiente transcripción de una consulta veterinaria y genera una nota clínica estructurada en formato SOAP en español.
 
-INSTRUCCIONES IMPORTANTES:
+INSTRUCCIONES:
 - Usa ÚNICAMENTE la información presente en la transcripción
 - No inventes datos que no se mencionaron
 - Usa terminología veterinaria clínica apropiada
-- Si no hay información para un campo, escribe "No reportado en la consulta"
+- Si no hay información para un campo escribe "No reportado en la consulta"
+- En el Plan incluye medicamentos con nombre, dosis, vía de administración, frecuencia y duración
+- En medicamentosSugeridos sugiere medicamentos veterinarios apropiados basándote en el análisis clínico, incluso si no se mencionaron explícitamente en la transcripción
 - Sé conciso pero completo
 
-Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
-{
-  "subjetivo": "motivo de consulta, síntomas reportados por el propietario, historia clínica",
-  "objetivo": "hallazgos del examen físico, constantes vitales, peso, temperatura",
-  "analisis": "diagnóstico presuntivo o diferencial basado en los datos",
-  "plan": "tratamiento, medicamentos con dosis, recomendaciones, próxima cita"
-}
+Devuelve ÚNICAMENTE un objeto JSON válido sin comentarios ni backticks:
+{"subjetivo":"...","objetivo":"...","analisis":"...","plan":"...","medicamentosSugeridos":[{"nombre":"...","dosis":"...","via":"...","frecuencia":"...","duracion":"...","indicacion":"..."}]}
 
-Transcripción de la consulta:
+Transcripción:
 "${transcription}"
 `;
 
@@ -72,7 +69,8 @@ Transcripción de la consulta:
       subjetivo: soap.subjetivo || '',
       objetivo: soap.objetivo || '',
       analisis: soap.analisis || '',
-      plan: soap.plan || ''
+      plan: soap.plan || '',
+      medicamentosSugeridos: soap.medicamentosSugeridos || []
     };
   } catch (error: any) {
     console.error('Error in Gemini service:', error);
@@ -81,7 +79,8 @@ Transcripción de la consulta:
       subjetivo: `Error al procesar con IA. Transcripción original: ${transcription}`,
       objetivo: 'No se pudo generar automáticamente.',
       analisis: 'No se pudo generar automáticamente.',
-      plan: 'No se pudo generar automáticamente.'
+      plan: 'No se pudo generar automáticamente.',
+      medicamentosSugeridos: []
     };
   }
 };
