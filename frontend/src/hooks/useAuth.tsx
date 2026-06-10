@@ -13,6 +13,7 @@ interface AuthContextType {
   user: Veterinario | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
+  accessDeniedMessage: string | null;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -23,12 +24,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<Veterinario | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
       setLoading(true);
+      setAccessDeniedMessage(null);
+
       if (fUser) {
         setFirebaseUser(fUser);
+
+        // Check email whitelist access
+        try {
+          const accesoDocRef = doc(db, 'configuracion', 'acceso');
+          const accesoSnap = await getDoc(accesoDocRef);
+          
+          if (accesoSnap.exists()) {
+            const data = accesoSnap.data();
+            const emailsPermitidos: string[] = data.emailsPermitidos || [];
+            
+            // If the whitelist exists and is non-empty, enforce it
+            if (emailsPermitidos.length > 0) {
+              const userEmail = fUser.email || '';
+              if (!emailsPermitidos.includes(userEmail)) {
+                // User is not in the whitelist — deny access
+                setAccessDeniedMessage('Tu cuenta no tiene acceso a VetIA. Contacta al administrador.');
+                await signOut(auth);
+                setFirebaseUser(null);
+                setUser(null);
+                setLoading(false);
+                return;
+              }
+            }
+            // If the list is empty, allow all (dev mode)
+          }
+          // If the document doesn't exist, allow all (dev mode)
+        } catch (error) {
+          console.error('Error checking access whitelist:', error);
+          // On error reading whitelist, allow access (fail-open for dev mode)
+        }
         
         // Try to fetch or create the Veterinario doc in Firestore
         const vetDocRef = doc(db, 'veterinarios', fUser.uid);
@@ -80,6 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithGoogle = async () => {
     setLoading(true);
+    setAccessDeniedMessage(null);
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
@@ -101,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading, accessDeniedMessage, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

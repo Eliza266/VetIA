@@ -18,12 +18,16 @@ import {
 const DetallePaciente: React.FC = () => {
   const { id } = useParams<{ id: string }>();
 
-  const { getPaciente } = usePacientes();
+  const { getPaciente, pacientes, fetchPacientes } = usePacientes();
   const { fetchConsultasPorPaciente } = useConsultas();
 
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [consultasPaciente, setConsultasPaciente] = useState<Consulta[]>([]);
   const [loadingGeneral, setLoadingGeneral] = useState(true);
+
+  useEffect(() => {
+    fetchPacientes();
+  }, [fetchPacientes]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -102,6 +106,9 @@ const DetallePaciente: React.FC = () => {
     }
   };
 
+  // Other patients (excluding current one)
+  const otrosPacientes = pacientes.filter(p => p.id !== id);
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Navigation & Header */}
@@ -119,7 +126,7 @@ const DetallePaciente: React.FC = () => {
               <span className="text-2xl">{getSpeciesEmoji(paciente.especie)}</span>
               <h1 className="text-2xl font-extrabold tracking-tight text-slate-800">{paciente.nombre}</h1>
             </div>
-            <p className="text-xs text-slate-400 font-medium">Expediente Médico #{paciente.id?.slice(-6).toUpperCase()}</p>
+            <p className="text-xs text-slate-400 font-medium">Expediente Médico</p>
           </div>
         </div>
 
@@ -307,6 +314,28 @@ const DetallePaciente: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Otros Pacientes Section */}
+          {otrosPacientes.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+              <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-3 mb-4">Otros Pacientes</h3>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                {otrosPacientes.slice(0, 10).map((p) => (
+                  <Link
+                    key={p.id}
+                    to={`/pacientes/${p.id}`}
+                    className="flex items-center gap-3 px-4 py-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 hover:border-[#0F6E56]/30 rounded-xl transition-all shrink-0 min-w-[180px]"
+                  >
+                    <span className="text-xl">{getSpeciesEmoji(p.especie)}</span>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-slate-800 truncate">{p.nombre}</h4>
+                      <p className="text-[10px] text-slate-400 capitalize truncate">{p.raza || p.especie} • {p.sexo}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
