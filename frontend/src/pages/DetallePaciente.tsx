@@ -33,7 +33,36 @@ const DetallePaciente: React.FC = () => {
 
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [consultasPaciente, setConsultasPaciente] = useState<Consulta[]>([]);
+  const [consultasFiltradas, setConsultasFiltradas] = useState<Consulta[]>([]);
   const [loadingGeneral, setLoadingGeneral] = useState(true);
+  
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+
+  useEffect(() => {
+    setConsultasFiltradas(consultasPaciente);
+  }, [consultasPaciente]);
+
+  const handleFilter = () => {
+    let filtered = [...consultasPaciente];
+    if (fechaDesde) {
+      const start = new Date(fechaDesde);
+      start.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(c => new Date(c.fechaHora).getTime() >= start.getTime());
+    }
+    if (fechaHasta) {
+      const end = new Date(fechaHasta);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(c => new Date(c.fechaHora).getTime() <= end.getTime());
+    }
+    setConsultasFiltradas(filtered);
+  };
+
+  const handleClearFilter = () => {
+    setFechaDesde('');
+    setFechaHasta('');
+    setConsultasFiltradas(consultasPaciente);
+  };
 
   useEffect(() => {
     fetchPacientes();
@@ -122,8 +151,8 @@ const DetallePaciente: React.FC = () => {
     .filter(c => c.signosVitales?.peso || c.signosVitales?.temperatura)
     .map(c => ({
       fecha: new Date(c.fechaHora).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }),
-      peso: c.signosVitales?.peso ? parseFloat(c.signosVitales.peso) : null,
-      temperatura: c.signosVitales?.temperatura ? parseFloat(c.signosVitales.temperatura) : null,
+      peso: c.signosVitales?.peso != null ? Number(c.signosVitales.peso) : null,
+      temperatura: c.signosVitales?.temperatura != null ? Number(c.signosVitales.temperatura) : null,
       hc: c.numeroHC || ''
     }));
 
@@ -304,7 +333,7 @@ const DetallePaciente: React.FC = () => {
                 {hasPesoData && (
                   <div className="space-y-4">
                     <h4 className="text-xs font-bold text-slate-600 text-center">Peso (kg)</h4>
-                    <div className="h-48 w-full">
+                    <div style={{ width: '100%', height: 200 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={evolucionDatos}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -325,7 +354,7 @@ const DetallePaciente: React.FC = () => {
                 {hasTempData && (
                   <div className="space-y-4">
                     <h4 className="text-xs font-bold text-slate-600 text-center">Temperatura (°C)</h4>
-                    <div className="h-48 w-full">
+                    <div style={{ width: '100%', height: 200 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={evolucionDatos}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -349,15 +378,58 @@ const DetallePaciente: React.FC = () => {
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
             <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-3 mb-6">Historial de Consultas Clínicas</h3>
 
-            {consultasPaciente.length === 0 ? (
+            {consultasPaciente.length > 0 && (
+              <div className="flex flex-wrap items-end gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Desde</label>
+                  <input
+                    type="date"
+                    value={fechaDesde}
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    className="px-3 py-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg focus:border-[#0F6E56] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hasta</label>
+                  <input
+                    type="date"
+                    value={fechaHasta}
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    className="px-3 py-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg focus:border-[#0F6E56] outline-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleFilter}
+                    className="px-4 py-2 bg-[#0F6E56] hover:bg-[#0c5945] text-white text-sm font-bold rounded-lg transition-colors"
+                  >
+                    Filtrar
+                  </button>
+                  {(fechaDesde || fechaHasta) && (
+                    <button
+                      onClick={handleClearFilter}
+                      className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 text-sm font-bold rounded-lg transition-colors"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {consultasFiltradas.length === 0 ? (
               <div className="text-center py-12 text-slate-500">
                 <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-sm">No hay consultas registradas en este expediente.</p>
-                <p className="text-xs text-slate-400 mt-1">Haz clic en "Nueva Consulta" para iniciar una evaluación clínica.</p>
+                <p className="text-sm">
+                  {consultasPaciente.length === 0 ? 'No hay consultas registradas en este expediente.' : 'No hay consultas en el rango de fechas seleccionado.'}
+                </p>
+                {consultasPaciente.length === 0 && (
+                  <p className="text-xs text-slate-400 mt-1">Haz clic en "Nueva Consulta" para iniciar una evaluación clínica.</p>
+                )}
               </div>
             ) : (
               <div className="relative border-l border-slate-100 pl-6 ml-3 space-y-8">
-                {consultasPaciente.map((consulta) => (
+                {consultasFiltradas.map((consulta) => (
                   <div key={consulta.id} className="relative group">
                     <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-white ${consulta.estado === 'aprobada'
                         ? 'bg-emerald-500'

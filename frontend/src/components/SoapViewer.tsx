@@ -165,7 +165,7 @@ const SoapViewer: React.FC<SoapViewerProps> = ({ soap, onSave }) => {
             {isEditing ? (
               <textarea
                 name={sec.key}
-                value={editSoap[sec.key]}
+                value={editSoap[sec.key] as string}
                 onChange={handleChange}
                 rows={5}
                 className="w-full mt-2 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700 focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] outline-none transition-shadow resize-none"
@@ -173,7 +173,7 @@ const SoapViewer: React.FC<SoapViewerProps> = ({ soap, onSave }) => {
               />
             ) : (
               <p className="mt-2 text-sm text-slate-600 leading-relaxed whitespace-pre-line bg-white/60 p-3 rounded-lg border border-white/80 flex-1">
-                {editSoap[sec.key] || <span className="italic text-slate-400">Sin registrar</span>}
+                {(editSoap[sec.key] as string) || <span className="italic text-slate-400">Sin registrar</span>}
               </p>
             )}
           </div>

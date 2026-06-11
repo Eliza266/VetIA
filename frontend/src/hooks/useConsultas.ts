@@ -213,7 +213,7 @@ export const useConsultas = () => {
   /**
    * Process recorded audio: Uploads to Firebase storage, transcribes with Whisper, and structures SOAP with Gemini.
    */
-  const procesarAudioConsulta = async (consultaId: string, audioBlob: Blob): Promise<boolean> => {
+  const procesarAudioConsulta = async (consultaId: string, audioBlob: Blob, onProgress?: (msg: string, pct: number) => void): Promise<boolean> => {
     if (!user) {
       console.error('[VetIA] Error en paso 0: Usuario no autenticado');
       return false;
@@ -225,10 +225,12 @@ export const useConsultas = () => {
 
     try {
       // 1. Set status to processing
+      if (onProgress) onProgress('Preparando consulta...', 10);
       console.log('[VetIA] Paso 1: Marcando consulta como "procesando"...');
       await actualizarConsulta(consultaId, { estado: 'procesando' });
 
       // 2. Upload to Storage: audios/{veterinarioId}/{consultaId}
+      if (onProgress) onProgress('Subiendo audio...', 25);
       const audioPath = `audios/${user.uid}/${consultaId}.webm`;
       console.log('[VetIA] Paso 2: Subiendo audio a Storage...', audioPath);
       const storageRef = ref(storage, audioPath);
@@ -240,6 +242,7 @@ export const useConsultas = () => {
       await actualizarConsulta(consultaId, { audioUrl: downloadUrl });
 
       // 3. Transcribe audio using Gemini
+      if (onProgress) onProgress('Transcribiendo consulta...', 50);
       let transcriptionText = '';
       try {
         console.log('[VetIA] Paso 3: Llamando a Gemini para transcripción...');
@@ -256,13 +259,30 @@ export const useConsultas = () => {
       }
 
       // 4. Generate SOAP using Gemini
+      if (onProgress) onProgress('Generando historia clínica con IA...', 75);
       try {
         console.log('[VetIA] Paso 4: Llamando a Gemini para generar SOAP...');
-        const soapResult = await generateSOAP(transcriptionText);
-        console.log('[VetIA] SOAP generado:', soapResult);
+        const geminiResult = await generateSOAP(transcriptionText);
+        console.log('[VetIA] IA generado:', geminiResult);
+        
         await actualizarConsulta(consultaId, {
-          soap: soapResult,
-          estado: 'borrador' // Default to draft for veterinarian review
+          soap: {
+            subjetivo: geminiResult.subjetivo,
+            objetivo: geminiResult.objetivo,
+            analisis: geminiResult.analisis,
+            plan: geminiResult.plan,
+            medicamentosSugeridos: geminiResult.medicamentosSugeridos || []
+          },
+          motivo: geminiResult.motivo || '',
+          prioridad: geminiResult.prioridad || 'rutina',
+          signosVitales: {
+            peso: geminiResult.signosVitales?.peso || null,
+            temperatura: geminiResult.signosVitales?.temperatura || null,
+            frecuenciaCardiaca: geminiResult.signosVitales?.frecuenciaCardiaca || null,
+            frecuenciaRespiratoria: geminiResult.signosVitales?.frecuenciaRespiratoria || null,
+            condicionCorporal: geminiResult.signosVitales?.condicionCorporal || null
+          },
+          estado: 'borrador'
         });
       } catch (geminiErr) {
         console.error('[VetIA] Error en paso 4 (Gemini):', geminiErr);
@@ -272,6 +292,7 @@ export const useConsultas = () => {
         throw geminiErr;
       }
 
+      if (onProgress) onProgress('¡Historia clínica generada!', 100);
       console.log('[VetIA] ✅ Procesamiento completo para consulta:', consultaId);
       return true;
     } catch (err: any) {

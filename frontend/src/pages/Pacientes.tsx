@@ -6,7 +6,7 @@ import { db } from '../services/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import PacienteCard from '../components/PacienteCard';
 import { Search, Plus, Filter, AlertCircle, LayoutGrid, List } from 'lucide-react';
-import type { Paciente, Cita } from '../types';
+import type { Cita } from '../types';
 
 const SPECIES_EMOJI: Record<string, string> = {
   perro: '🐶', gato: '🐱', ave: '🦜', reptil: '🦎', otro: '🐾'

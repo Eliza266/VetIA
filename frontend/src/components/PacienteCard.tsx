@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import type { Paciente } from '../types';
 import { Phone, User, Calendar, ArrowRight } from 'lucide-react';
 
@@ -45,11 +45,12 @@ const PacienteCard: React.FC<PacienteCardProps> = ({ paciente }) => {
   };
 
   const initial = nombre.trim().charAt(0).toUpperCase();
+  const navigate = useNavigate();
 
   return (
-    <Link 
-      to={`/pacientes/${id}`}
-      className="group relative bg-white rounded-3xl border border-slate-150 p-6 shadow-sm hover:shadow-md hover:border-[#0F6E56]/40 transition-all duration-250 flex flex-col justify-between"
+    <div 
+      onClick={() => navigate(`/pacientes/${id}`)}
+      className="cursor-pointer group relative bg-white rounded-3xl border border-slate-150 p-6 shadow-sm hover:shadow-md hover:border-[#0F6E56]/40 transition-all duration-250 flex flex-col justify-between"
     >
       <div>
         {/* Header with Avatar and Species Badge */}
@@ -97,6 +98,7 @@ const PacienteCard: React.FC<PacienteCardProps> = ({ paciente }) => {
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Teléfono</span>
             <a 
               href={`tel:${propietario.telefono}`}
+              onClick={(e) => e.stopPropagation()}
               className="font-semibold text-[#0F6E56] hover:underline flex items-center gap-1.5"
             >
               <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -113,7 +115,7 @@ const PacienteCard: React.FC<PacienteCardProps> = ({ paciente }) => {
         Ver Expediente Completo
         <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
       </div>
-    </Link>
+    </div>
   );
 };
 

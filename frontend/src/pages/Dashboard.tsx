@@ -13,7 +13,6 @@ import {
   TrendingUp, 
   Play,
   Calendar,
-  Clock,
   Mic,
   ArrowRight
 } from 'lucide-react';

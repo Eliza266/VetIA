@@ -7,8 +7,7 @@ import {
   doc, 
   getDoc, 
   addDoc, 
-  updateDoc, 
-  orderBy 
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from './useAuth';
@@ -27,8 +26,7 @@ export const useBrigadas = () => {
     try {
       const q = query(
         collection(db, 'brigadas'),
-        where('veterinarioIds', 'array-contains', user.uid),
-        orderBy('creadoEn', 'desc')
+        where('veterinarioIds', 'array-contains', user.uid)
       );
       
       const querySnapshot = await getDocs(q);
@@ -41,6 +39,7 @@ export const useBrigadas = () => {
           creadoEn: data.creadoEn?.toDate ? data.creadoEn.toDate() : new Date(data.creadoEn)
         } as Brigada);
       });
+      list.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
       setBrigadas(list);
       return list;
     } catch (err: any) {

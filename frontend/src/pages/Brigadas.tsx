@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
 import { useBrigadas } from '../hooks/useBrigadas';
 import type { Brigada } from '../types';
-import { MapPin, Plus, X, Calendar, Users, Activity, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { MapPin, Plus, X, Calendar, Users, Activity, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const ESTADO_CONFIG = {
   planificada: { label: 'Planificada', classes: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' },
@@ -12,7 +11,6 @@ const ESTADO_CONFIG = {
 
 const Brigadas: React.FC = () => {
   const { brigadas, loading, error, crearBrigada, actualizarBrigada } = useBrigadas();
-  const navigate = useNavigate();
 
   const [showModal, setShowModal] = useState(false);
   const [selectedBrigada, setSelectedBrigada] = useState<Brigada | null>(null);

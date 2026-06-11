@@ -16,9 +16,17 @@ import {
   Sparkles,
   Pill,
   Stethoscope,
-  Activity
+  Activity,
+  AlertTriangle,
+  FilePlus,
+  MessageCircle,
+  Mail
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { doc, getDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db, storage } from '../services/firebase';
 
 const PRIORIDAD_COLORS: Record<string, string> = {
   urgente: 'bg-red-50 text-red-700 border-red-200',
@@ -48,6 +56,31 @@ const DetalleConsulta: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [perfilVet, setPerfilVet] = useState<any>(null);
+  
+  // Edit state for draft
+  const [editData, setEditData] = useState<{
+    motivo: string;
+    prioridad: string;
+    signosVitales: any;
+  }>({ motivo: '', prioridad: 'rutina', signosVitales: {} });
+  const [isSavingDatos, setIsSavingDatos] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  useEffect(() => {
+    const fetchVet = async () => {
+      if (user?.uid) {
+        try {
+          const vDoc = await getDoc(doc(db, 'veterinarios', user.uid));
+          if (vDoc.exists()) setPerfilVet(vDoc.data());
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+    fetchVet();
+  }, [user]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -56,6 +89,13 @@ const DetalleConsulta: React.FC = () => {
         try {
           const consData = await getConsulta(consultaId);
           setConsulta(consData);
+          if (consData) {
+            setEditData({
+              motivo: consData.motivo || '',
+              prioridad: consData.prioridad || 'rutina',
+              signosVitales: consData.signosVitales || {}
+            });
+          }
           
           const pacData = await getPaciente(pacienteId);
           setPaciente(pacData);
@@ -104,6 +144,37 @@ const DetalleConsulta: React.FC = () => {
     }
   };
 
+  const handleSaveDatos = async () => {
+    if (!consultaId) return;
+    setIsSavingDatos(true);
+    setError(null);
+    try {
+      const cleanSv: any = {};
+      Object.entries(editData.signosVitales).forEach(([k, v]) => {
+        if (v !== undefined && v !== '' && v !== null) cleanSv[k] = v;
+      });
+      const updates: any = {
+        motivo: editData.motivo.trim(),
+        prioridad: editData.prioridad,
+        signosVitales: cleanSv,
+      };
+      if (consulta?.soap) {
+        updates.soap = consulta.soap;
+      }
+      const ok = await actualizarConsulta(consultaId, updates);
+      if (ok) {
+        setConsulta((prev) => prev ? { ...prev, ...updates } : null);
+      } else {
+        throw new Error('No se pudo guardar los datos.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Error al guardar los datos clínicos.');
+    } finally {
+      setIsSavingDatos(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!consultaId || !pacienteId) return;
     const confirmDelete = window.confirm('¿Estás seguro de eliminar esta consulta? Esta acción no se puede deshacer.');
@@ -138,8 +209,8 @@ const DetalleConsulta: React.FC = () => {
     });
   };
 
-  const handleDownloadPDF = () => {
-    if (!consulta || !paciente || !user) return;
+  const generatePDFDocument = () => {
+    if (!consulta || !paciente || !user) return null;
     
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -156,15 +227,19 @@ const DetalleConsulta: React.FC = () => {
     pdf.setFillColor(15, 110, 86);
     pdf.rect(0, 0, pageWidth, 35, 'F');
     
+    const vetName = perfilVet?.veterinaria || "Clínica Veterinaria";
+    const vetSede = perfilVet?.sede ? `Sede: ${perfilVet.sede} - ${perfilVet.ciudad || ''}` : "Sede Principal";
+    const vetTel = `Tel: ${perfilVet?.telefono || perfilVet?.whatsapp || 'No registrado'}`;
+
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(22);
     pdf.setTextColor(255, 255, 255);
-    pdf.text(user.veterinaria || "Clínica Veterinaria", 14, 16);
+    pdf.text(vetName, 14, 16);
     
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
-    pdf.text(user.sede ? `Sede: ${user.sede} - ${user.ciudad || ''}` : "Sede Principal", 14, 23);
-    pdf.text(`Tel: ${user.telefono || user.whatsapp || 'No registrado'}`, 14, 28);
+    pdf.text(vetSede, 14, 23);
+    pdf.text(vetTel, 14, 28);
     
     // Prominent HC Number
     pdf.setFont("helvetica", "bold");
@@ -342,11 +417,11 @@ const DetalleConsulta: React.FC = () => {
     pdf.line(14, y, 80, y);
     y += 5;
     pdf.setFont("helvetica", "bold");
-    pdf.text(`Dr(a). ${user.nombre}`, 14, y);
+    pdf.text(`Dr(a). ${perfilVet?.nombre || user.nombre || 'Veterinario'}`, 14, y);
     y += 4;
     pdf.setFont("helvetica", "normal");
-    if (user.matriculaProfesional) {
-      pdf.text(`Matrícula Profesional: ${user.matriculaProfesional}`, 14, y);
+    if (perfilVet?.matriculaProfesional || user.matriculaProfesional) {
+      pdf.text(`Matrícula Profesional: ${perfilVet?.matriculaProfesional || user.matriculaProfesional}`, 14, y);
     }
     
     // Page footers
@@ -364,7 +439,68 @@ const DetalleConsulta: React.FC = () => {
       pdf.text(`Página ${i} de ${pageCount}`, pageWidth - 14, 288, { align: 'right' });
     }
     
-    const filename = `HC_${consulta.numeroHC || 'SF'}_${paciente.nombre.replace(/\s/g, '_')}.pdf`;
+    return pdf;
+  };
+
+  const uploadPDF = async (): Promise<string> => {
+    const pdf = generatePDFDocument();
+    if (!pdf) throw new Error("No se pudo generar el PDF");
+    const blob = pdf.output('blob');
+    const pdfRef = ref(storage, `historiales/${consultaId}.pdf`);
+    await uploadBytes(pdfRef, blob);
+    return await getDownloadURL(pdfRef);
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!paciente?.propietario?.whatsapp && !paciente?.propietario?.telefono) {
+      alert('El propietario no tiene número de teléfono registrado. Actualiza sus datos.');
+      return;
+    }
+    setIsSendingWhatsApp(true);
+    try {
+      const urlPdf = await uploadPDF();
+      const phone = paciente.propietario.whatsapp || paciente.propietario.telefono;
+      const mensaje = `Hola ${paciente.propietario.nombre}, adjunto encontrará la historia clínica de ${paciente.nombre} generada el ${new Date(consulta!.fechaHora).toLocaleDateString('es-CO')}. Puede descargarla aquí: ${urlPdf}`;
+      const url = `https://wa.me/57${phone}?text=${encodeURIComponent(mensaje)}`;
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error(err);
+      alert('Error al generar o subir el PDF.');
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!paciente?.propietario?.email) {
+      alert('El propietario no tiene correo electrónico registrado.');
+      return;
+    }
+    setIsSendingEmail(true);
+    try {
+      const urlPdf = await uploadPDF();
+      const functions = getFunctions();
+      const enviarEmail = httpsCallable(functions, 'enviarHistorialEmail');
+      await enviarEmail({
+        emailDestinatario: paciente.propietario.email,
+        nombrePropietario: paciente.propietario.nombre,
+        nombrePaciente: paciente.nombre,
+        pdfUrl: urlPdf,
+        nombreVet: user?.displayName || user?.nombre
+      });
+      alert('¡Correo enviado exitosamente!');
+    } catch (err) {
+      console.error(err);
+      alert('Error al enviar el correo.');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    const pdf = generatePDFDocument();
+    if (!pdf) return;
+    const filename = `HC_${consulta?.numeroHC || 'SF'}_${paciente?.nombre.replace(/\s/g, '_')}.pdf`;
     pdf.save(filename);
   };
 
@@ -433,14 +569,45 @@ const DetalleConsulta: React.FC = () => {
             </button>
           )}
 
-          {consulta.estado === 'aprobada' && (
+          {consulta.estado === 'borrador' && (
             <button
-              onClick={handleDownloadPDF}
-              className="flex items-center justify-center gap-2 rounded-xl bg-[#0F6E56]/10 hover:bg-[#0F6E56]/20 border border-[#0F6E56]/10 px-4 py-2.5 text-sm font-bold text-[#0F6E56] transition-all"
+              onClick={handleSaveDatos}
+              disabled={isSavingDatos}
+              className="flex items-center justify-center gap-2 rounded-xl bg-white border border-[#0F6E56]/20 px-4 py-2.5 text-sm font-bold text-[#0F6E56] hover:bg-[#0F6E56]/5 transition-all disabled:opacity-50"
             >
-              <Download className="h-4 w-4" />
-              Descargar PDF
+              <CheckCircle2 className="h-4 w-4" />
+              {isSavingDatos ? 'Guardando...' : 'Guardar Cambios'}
             </button>
+          )}
+
+          {consulta.estado === 'aprobada' && (
+            <>
+              <button
+                onClick={handleSendWhatsApp}
+                disabled={isSendingWhatsApp}
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/20 px-4 py-2.5 text-sm font-bold text-[#128C7E] transition-all disabled:opacity-50"
+              >
+                <MessageCircle className="h-4 w-4" />
+                {isSendingWhatsApp ? 'Enviando...' : 'Enviar WhatsApp'}
+              </button>
+              {paciente?.propietario?.email && (
+                <button
+                  onClick={handleSendEmail}
+                  disabled={isSendingEmail}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-4 py-2.5 text-sm font-bold text-indigo-600 transition-all disabled:opacity-50"
+                >
+                  <Mail className="h-4 w-4" />
+                  {isSendingEmail ? 'Enviando...' : 'Enviar por Email'}
+                </button>
+              )}
+              <button
+                onClick={handleDownloadPDF}
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#0F6E56]/10 hover:bg-[#0F6E56]/20 border border-[#0F6E56]/10 px-4 py-2.5 text-sm font-bold text-[#0F6E56] transition-all"
+              >
+                <Download className="h-4 w-4" />
+                Descargar PDF
+              </button>
+            </>
           )}
 
           {consulta.estado !== 'aprobada' && consulta.soap && (
@@ -462,46 +629,109 @@ const DetalleConsulta: React.FC = () => {
         <div className="space-y-6 lg:col-span-1">
           
           {/* Motivo Card */}
-          {consulta.motivo && (
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-2">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+            <h3 className="font-bold text-slate-800 text-sm flex items-center justify-between border-b border-slate-50 pb-2">
+              <span className="flex items-center gap-2">
                 <Stethoscope className="h-4 w-4 text-[#0F6E56]" />
                 Motivo de Consulta
-              </h3>
+              </span>
+            </h3>
+            {consulta.estado === 'borrador' ? (
+              <textarea
+                value={editData.motivo}
+                onChange={(e) => setEditData({ ...editData, motivo: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] outline-none transition-all resize-none"
+                placeholder="Motivo principal..."
+              />
+            ) : (
               <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-                {consulta.motivo}
+                {consulta.motivo || 'No reportado'}
               </p>
+            )}
+          </div>
+
+          {/* Prioridad Card (Only show in draft mode for editing) */}
+          {consulta.estado === 'borrador' && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-2">
+                Prioridad
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(PRIORIDAD_LABELS).map((pKey) => (
+                  <button
+                    key={pKey}
+                    onClick={() => setEditData({ ...editData, prioridad: pKey })}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                      editData.prioridad === pKey
+                        ? PRIORIDAD_COLORS[pKey] + ' ring-1 ring-current'
+                        : 'bg-slate-50 text-slate-500 border-slate-200'
+                    }`}
+                  >
+                    {PRIORIDAD_LABELS[pKey]}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Vitals Table */}
-          {consulta.signosVitales && Object.values(consulta.signosVitales).some(v => v) && (
+          {(consulta.estado === 'borrador' || (consulta.signosVitales && Object.values(consulta.signosVitales).some(v => v))) && (
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-2">
                 <Activity className="h-4 w-4 text-[#0F6E56]" />
                 Signos Vitales
               </h3>
-              <div className="overflow-hidden rounded-xl border border-slate-100">
-                <table className="w-full text-xs text-left">
-                  <tbody className="divide-y divide-slate-100">
-                    {consulta.signosVitales.peso && (
-                      <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium w-1/2">Peso</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.peso} kg</td></tr>
-                    )}
-                    {consulta.signosVitales.temperatura && (
-                      <tr><th className="px-3 py-2 text-slate-500 font-medium">Temperatura</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.temperatura} °C</td></tr>
-                    )}
-                    {consulta.signosVitales.frecuenciaCardiaca && (
-                      <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium">F. Cardíaca</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.frecuenciaCardiaca} lpm</td></tr>
-                    )}
-                    {consulta.signosVitales.frecuenciaRespiratoria && (
-                      <tr><th className="px-3 py-2 text-slate-500 font-medium">F. Respiratoria</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.frecuenciaRespiratoria} rpm</td></tr>
-                    )}
-                    {consulta.signosVitales.condicionCorporal && (
-                      <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium">Cond. Corporal</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.condicionCorporal}/5</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {consulta.estado === 'borrador' ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { field: 'peso', label: 'Peso (kg)', step: 0.1 },
+                    { field: 'temperatura', label: 'Temp (°C)', step: 0.1 },
+                    { field: 'frecuenciaCardiaca', label: 'FC (lpm)', step: 1 },
+                    { field: 'frecuenciaRespiratoria', label: 'FR (rpm)', step: 1 },
+                    { field: 'condicionCorporal', label: 'CC (1-5)', step: 1 },
+                  ].map(({ field, label, step }) => (
+                    <div key={field}>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</label>
+                      <input
+                        type="number"
+                        step={step}
+                        value={editData.signosVitales[field] ?? ''}
+                        onChange={(e) => setEditData({
+                          ...editData,
+                          signosVitales: {
+                            ...editData.signosVitales,
+                            [field]: e.target.value === '' ? undefined : Number(e.target.value)
+                          }
+                        })}
+                        className="w-full px-2.5 py-1.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:border-[#0F6E56] outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-slate-100">
+                  <table className="w-full text-xs text-left">
+                    <tbody className="divide-y divide-slate-100">
+                      {consulta.signosVitales?.peso && (
+                        <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium w-1/2">Peso</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.peso} kg</td></tr>
+                      )}
+                      {consulta.signosVitales?.temperatura && (
+                        <tr><th className="px-3 py-2 text-slate-500 font-medium">Temperatura</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.temperatura} °C</td></tr>
+                      )}
+                      {consulta.signosVitales?.frecuenciaCardiaca && (
+                        <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium">F. Cardíaca</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.frecuenciaCardiaca} lpm</td></tr>
+                      )}
+                      {consulta.signosVitales?.frecuenciaRespiratoria && (
+                        <tr><th className="px-3 py-2 text-slate-500 font-medium">F. Respiratoria</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.frecuenciaRespiratoria} rpm</td></tr>
+                      )}
+                      {consulta.signosVitales?.condicionCorporal && (
+                        <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium">Cond. Corporal</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.condicionCorporal}/5</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
