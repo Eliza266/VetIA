@@ -4,6 +4,15 @@ import { usePacientes } from '../hooks/usePacientes';
 import { useConsultas } from '../hooks/useConsultas';
 import type { Paciente, Consulta } from '../types';
 import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
+import {
   ArrowLeft,
   Plus,
   Phone,
@@ -12,7 +21,8 @@ import {
   FileText,
   ShieldAlert,
   Info,
-  ChevronRight
+  ChevronRight,
+  TrendingUp
 } from 'lucide-react';
 
 const DetallePaciente: React.FC = () => {
@@ -44,7 +54,6 @@ const DetallePaciente: React.FC = () => {
             const consData = await fetchConsultasPorPaciente(id);
             setConsultasPaciente(consData || []);
           } catch {
-            // Consultation fetch failed (e.g. missing index) — show empty list
             setConsultasPaciente([]);
           }
         }
@@ -79,7 +88,6 @@ const DetallePaciente: React.FC = () => {
     );
   }
 
-  // Calculate approximate age
   const getAge = (birthDateString?: string) => {
     if (!birthDateString) return 'No registrada';
     const birthDate = new Date(birthDateString);
@@ -106,8 +114,21 @@ const DetallePaciente: React.FC = () => {
     }
   };
 
-  // Other patients (excluding current one)
   const otrosPacientes = pacientes.filter(p => p.id !== id);
+
+  // Evolución data
+  const consultasOrdenadas = [...consultasPaciente].sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime());
+  const evolucionDatos = consultasOrdenadas
+    .filter(c => c.signosVitales?.peso || c.signosVitales?.temperatura)
+    .map(c => ({
+      fecha: new Date(c.fechaHora).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }),
+      peso: c.signosVitales?.peso ? parseFloat(c.signosVitales.peso) : null,
+      temperatura: c.signosVitales?.temperatura ? parseFloat(c.signosVitales.temperatura) : null,
+      hc: c.numeroHC || ''
+    }));
+
+  const hasPesoData = evolucionDatos.some(d => d.peso !== null);
+  const hasTempData = evolucionDatos.some(d => d.temperatura !== null);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -121,12 +142,20 @@ const DetallePaciente: React.FC = () => {
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{getSpeciesEmoji(paciente.especie)}</span>
+          <div className="flex items-center gap-4">
+            {paciente.foto ? (
+              <img src={paciente.foto} alt={paciente.nombre} className="h-16 w-16 rounded-full object-cover shadow-sm border-2 border-white" />
+            ) : (
+              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center text-3xl shadow-sm border-2 border-white">
+                {getSpeciesEmoji(paciente.especie)}
+              </div>
+            )}
+            <div>
               <h1 className="text-2xl font-extrabold tracking-tight text-slate-800">{paciente.nombre}</h1>
+              <p className="text-sm text-slate-500 font-medium capitalize">
+                {paciente.especie} {paciente.raza ? `• ${paciente.raza}` : ''}
+              </p>
             </div>
-            <p className="text-xs text-slate-400 font-medium">Expediente Médico</p>
           </div>
         </div>
 
@@ -148,29 +177,45 @@ const DetallePaciente: React.FC = () => {
 
             <div className="space-y-3 text-sm">
               <div className="flex justify-between py-1 border-b border-slate-50/50">
-                <span className="text-slate-400 font-medium">Especie</span>
-                <span className="font-bold text-slate-700 capitalize">{paciente.especie}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50/50">
-                <span className="text-slate-400 font-medium">Raza</span>
-                <span className="font-bold text-slate-700">{paciente.raza || 'Mestizo'}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50/50">
                 <span className="text-slate-400 font-medium">Sexo</span>
                 <span className="font-bold text-slate-700 capitalize">{paciente.sexo}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-50/50">
-                <span className="text-slate-400 font-medium">Reproducción</span>
-                <span className="font-bold text-slate-700 capitalize">{paciente.estadoReproductivo}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50/50">
                 <span className="text-slate-400 font-medium">Edad</span>
                 <span className="font-bold text-slate-700">{getAge(paciente.fechaNacimiento)}</span>
               </div>
-              {paciente.fechaNacimiento && (
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-400 font-medium">Fecha Nac.</span>
-                  <span className="font-bold text-slate-700">{new Date(paciente.fechaNacimiento).toLocaleDateString()}</span>
+              <div className="flex justify-between py-1 border-b border-slate-50/50">
+                <span className="text-slate-400 font-medium">Reproducción</span>
+                <span className="font-bold text-slate-700 capitalize">{paciente.estadoReproductivo}</span>
+              </div>
+              {paciente.color && (
+                <div className="flex justify-between py-1 border-b border-slate-50/50">
+                  <span className="text-slate-400 font-medium">Color/Pelaje</span>
+                  <span className="font-bold text-slate-700">{paciente.color}</span>
+                </div>
+              )}
+              {paciente.chip && (
+                <div className="flex justify-between py-1 border-b border-slate-50/50">
+                  <span className="text-slate-400 font-medium">Microchip</span>
+                  <span className="font-bold text-slate-700">{paciente.chip}</span>
+                </div>
+              )}
+              {paciente.origen && (
+                <div className="flex justify-between py-1 border-b border-slate-50/50">
+                  <span className="text-slate-400 font-medium">Origen</span>
+                  <span className="font-bold text-slate-700">{paciente.origen}</span>
+                </div>
+              )}
+              {paciente.ultimoPeso && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-50/50">
+                  <span className="text-slate-400 font-medium">Último Peso</span>
+                  <span className="bg-[#0F6E56]/10 text-[#0F6E56] font-bold px-2 py-0.5 rounded-lg">{paciente.ultimoPeso} kg</span>
+                </div>
+              )}
+              {paciente.ultimaTalla && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-50/50">
+                  <span className="text-slate-400 font-medium">Última Talla</span>
+                  <span className="bg-[#0F6E56]/10 text-[#0F6E56] font-bold px-2 py-0.5 rounded-lg">{paciente.ultimaTalla} cm</span>
                 </div>
               )}
             </div>
@@ -200,6 +245,9 @@ const DetallePaciente: React.FC = () => {
                   <a href={`tel:${paciente.propietario.telefono}`} className="text-sm font-bold text-[#0F6E56] hover:underline">
                     {paciente.propietario.telefono}
                   </a>
+                  {paciente.propietario.whatsapp && (
+                    <span className="text-xs text-slate-500 block">WA: {paciente.propietario.whatsapp}</span>
+                  )}
                 </div>
               </div>
 
@@ -233,8 +281,71 @@ const DetallePaciente: React.FC = () => {
           )}
         </div>
 
-        {/* Right Side: Timeline / Clinical Consultations History */}
+        {/* Right Side: Evolución & Timeline */}
         <div className="lg:col-span-2 space-y-6">
+          
+          {/* Evolución Clínica Charts */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+            <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-3 mb-6 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-[#0F6E56]" />
+              Evolución Clínica
+            </h3>
+            
+            {evolucionDatos.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <TrendingUp className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-medium">No hay datos de evolución</p>
+                <p className="text-xs mt-1 max-w-sm mx-auto">
+                  Registra signos vitales (peso, temperatura) en las consultas para ver la gráfica de evolución clínica.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {hasPesoData && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-600 text-center">Peso (kg)</h4>
+                    <div className="h-48 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={evolucionDatos}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} width={30} />
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '8px', fontSize: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value: any) => [`${value} kg`, 'Peso']}
+                            labelStyle={{ fontWeight: 'bold', color: '#334155' }}
+                          />
+                          <Line type="monotone" dataKey="peso" stroke="#0F6E56" strokeWidth={3} dot={{ fill: '#0F6E56', strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+                
+                {hasTempData && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-600 text-center">Temperatura (°C)</h4>
+                    <div className="h-48 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={evolucionDatos}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} width={30} />
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '8px', fontSize: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value: any) => [`${value} °C`, 'Temperatura']}
+                            labelStyle={{ fontWeight: 'bold', color: '#334155' }}
+                          />
+                          <Line type="monotone" dataKey="temperatura" stroke="#185FA5" strokeWidth={3} dot={{ fill: '#185FA5', strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} connectNulls />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
             <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-3 mb-6">Historial de Consultas Clínicas</h3>
 
@@ -248,7 +359,6 @@ const DetallePaciente: React.FC = () => {
               <div className="relative border-l border-slate-100 pl-6 ml-3 space-y-8">
                 {consultasPaciente.map((consulta) => (
                   <div key={consulta.id} className="relative group">
-                    {/* Circle icon on the timeline */}
                     <span className={`absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-white ${consulta.estado === 'aprobada'
                         ? 'bg-emerald-500'
                         : consulta.estado === 'procesando'
@@ -268,9 +378,14 @@ const DetallePaciente: React.FC = () => {
                           <span className="text-xs text-slate-400 font-medium">
                             {new Date(consulta.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
+                          {consulta.numeroHC && (
+                            <>
+                              <span className="text-slate-300 text-xs">•</span>
+                              <span className="text-xs font-bold text-[#0F6E56]">#{consulta.numeroHC}</span>
+                            </>
+                          )}
                         </div>
 
-                        {/* State indicator tag */}
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${consulta.estado === 'aprobada'
                             ? 'bg-emerald-50 text-emerald-700'
                             : consulta.estado === 'procesando'
@@ -283,7 +398,6 @@ const DetallePaciente: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Snippet details */}
                       {consulta.soap ? (
                         <div className="space-y-1 mt-3">
                           <div className="text-xs text-slate-600 truncate">

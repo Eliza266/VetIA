@@ -14,9 +14,25 @@ import {
   Trash2,
   Download,
   Sparkles,
-  Pill
+  Pill,
+  Stethoscope,
+  Activity
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+
+const PRIORIDAD_COLORS: Record<string, string> = {
+  urgente: 'bg-red-50 text-red-700 border-red-200',
+  rutina: 'bg-green-50 text-green-700 border-green-200',
+  seguimiento: 'bg-blue-50 text-blue-700 border-blue-200',
+  brigada: 'bg-orange-50 text-orange-700 border-orange-200'
+};
+
+const PRIORIDAD_LABELS: Record<string, string> = {
+  urgente: 'Urgente',
+  rutina: 'Rutina',
+  seguimiento: 'Seguimiento',
+  brigada: 'Brigada'
+};
 
 const DetalleConsulta: React.FC = () => {
   const { pacienteId, consultaId } = useParams<{ pacienteId: string; consultaId: string }>();
@@ -127,26 +143,8 @@ const DetalleConsulta: React.FC = () => {
     
     const pdf = new jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
-    
-    // 1. Green header band
-    pdf.setFillColor(15, 110, 86);
-    pdf.rect(0, 0, pageWidth, 32, 'F');
-    
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(24);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text("VetIA", 14, 18);
-    
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    pdf.text("Historia Clínica Veterinaria", 14, 26);
-    
-    pdf.setFontSize(9);
-    pdf.text(`Exportado: ${new Date().toLocaleDateString('es-CO')}`, pageWidth - 14, 26, { align: 'right' });
-    
-    let y = 42;
+    let y = 14;
 
-    // Helper to check page overflow
     const checkPage = (needed: number) => {
       if (y + needed > 275) {
         pdf.addPage();
@@ -154,164 +152,219 @@ const DetalleConsulta: React.FC = () => {
       }
     };
 
-    // 2. Veterinario section
+    // --- ENCABEZADO (OFICIAL) ---
+    pdf.setFillColor(15, 110, 86);
+    pdf.rect(0, 0, pageWidth, 35, 'F');
+    
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.setTextColor(15, 110, 86);
-    pdf.text("VETERINARIO", 14, y);
-    y += 6;
+    pdf.setFontSize(22);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(user.veterinaria || "Clínica Veterinaria", 14, 16);
+    
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(10);
-    pdf.setTextColor(60, 60, 60);
-    pdf.text(`Dr(a). ${user.nombre}`, 14, y);
-    y += 5;
-    pdf.setTextColor(120, 120, 120);
-    pdf.setFontSize(9);
-    pdf.text(user.email, 14, y);
-    y += 10;
-
-    // Divider
-    pdf.setDrawColor(220, 220, 220);
-    pdf.line(14, y, pageWidth - 14, y);
-    y += 8;
-
-    // 3. Patient details in clean table format
+    pdf.text(user.sede ? `Sede: ${user.sede} - ${user.ciudad || ''}` : "Sede Principal", 14, 23);
+    pdf.text(`Tel: ${user.telefono || user.whatsapp || 'No registrado'}`, 14, 28);
+    
+    // Prominent HC Number
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.setTextColor(15, 110, 86);
-    pdf.text("DATOS DEL PACIENTE", 14, y);
-    y += 7;
-
-    const patientFields = [
-      ['Nombre', paciente.nombre],
-      ['Especie', paciente.especie],
-      ['Raza', paciente.raza || 'No reportada'],
-      ['Sexo', paciente.sexo === 'macho' ? 'Macho' : 'Hembra'],
-      ['Propietario', paciente.propietario.nombre],
-      ['Teléfono', paciente.propietario.telefono]
-    ];
-
+    pdf.setFontSize(16);
+    pdf.text(`HISTORIA CLÍNICA N° ${consulta.numeroHC || 'S/N'}`, pageWidth - 14, 22, { align: 'right' });
     pdf.setFontSize(9);
-    patientFields.forEach(([label, value]) => {
-      checkPage(6);
-      pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(120, 120, 120);
-      pdf.text(`${label}:`, 14, y);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`Fecha: ${new Date(consulta.fechaHora).toLocaleDateString('es-CO')}`, pageWidth - 14, 28, { align: 'right' });
+
+    y = 45;
+
+    // --- SECCIÓN I: DATOS PACIENTE ---
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(15, 110, 86);
+    pdf.text("I. DATOS DEL PACIENTE Y PROPIETARIO", 14, y);
+    y += 6;
+
+    // Table format for patient
+    pdf.setDrawColor(200, 200, 200);
+    pdf.setFillColor(245, 245, 245);
+    pdf.rect(14, y, pageWidth - 28, 30);
+    
+    pdf.setFontSize(9);
+    pdf.setTextColor(0, 0, 0);
+    
+    // Row 1
+    pdf.setFont("helvetica", "bold"); pdf.text("Nombre:", 16, y + 6);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.nombre, 35, y + 6);
+    pdf.setFont("helvetica", "bold"); pdf.text("Especie:", 80, y + 6);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.especie, 98, y + 6);
+    pdf.setFont("helvetica", "bold"); pdf.text("Raza:", 140, y + 6);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.raza || "N/A", 152, y + 6);
+    
+    // Row 2
+    pdf.setFont("helvetica", "bold"); pdf.text("Sexo:", 16, y + 13);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.sexo, 35, y + 13);
+    pdf.setFont("helvetica", "bold"); pdf.text("Color:", 80, y + 13);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.color || "N/A", 98, y + 13);
+    pdf.setFont("helvetica", "bold"); pdf.text("Chip:", 140, y + 13);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.chip || "N/A", 152, y + 13);
+
+    // Row 3
+    pdf.setFont("helvetica", "bold"); pdf.text("Edad:", 16, y + 20);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.fechaNacimiento ? new Date().getFullYear() - new Date(paciente.fechaNacimiento).getFullYear() + " años" : "N/A", 35, y + 20);
+    pdf.setFont("helvetica", "bold"); pdf.text("Peso:", 80, y + 20);
+    pdf.setFont("helvetica", "normal"); pdf.text(consulta.signosVitales?.peso ? `${consulta.signosVitales.peso} kg` : "N/A", 98, y + 20);
+
+    // Row 4 (Propietario)
+    pdf.line(14, y + 23, pageWidth - 14, y + 23);
+    pdf.setFont("helvetica", "bold"); pdf.text("Propietario:", 16, y + 28);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.propietario.nombre, 40, y + 28);
+    pdf.setFont("helvetica", "bold"); pdf.text("Teléfono:", 100, y + 28);
+    pdf.setFont("helvetica", "normal"); pdf.text(paciente.propietario.telefono, 120, y + 28);
+    
+    y += 38;
+
+    // --- SECCIÓN II: DATOS CONSULTA ---
+    checkPage(30);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(15, 110, 86);
+    pdf.text("II. DATOS DE LA CONSULTA", 14, y);
+    y += 6;
+
+    pdf.rect(14, y, pageWidth - 28, 20);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(9);
+    
+    pdf.setFont("helvetica", "bold"); pdf.text("Fecha/Hora:", 16, y + 6);
+    pdf.setFont("helvetica", "normal"); pdf.text(`${new Date(consulta.fechaHora).toLocaleString('es-CO')}`, 40, y + 6);
+    pdf.setFont("helvetica", "bold"); pdf.text("Prioridad:", 100, y + 6);
+    pdf.setFont("helvetica", "normal"); pdf.text(PRIORIDAD_LABELS[consulta.prioridad || 'rutina'], 120, y + 6);
+    
+    pdf.setFont("helvetica", "bold"); pdf.text("Motivo:", 16, y + 13);
+    pdf.setFont("helvetica", "normal"); 
+    const motivoLines = pdf.splitTextToSize(consulta.motivo || "No reportado", pageWidth - 45);
+    pdf.text(motivoLines, 32, y + 13);
+    
+    y += 28;
+
+    // --- SECCIÓN III: SIGNOS VITALES ---
+    if (consulta.signosVitales && Object.keys(consulta.signosVitales).length > 0) {
+      checkPage(20);
       pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(60, 60, 60);
-      pdf.text(value, 55, y);
-      y += 5.5;
-    });
+      pdf.setFontSize(11);
+      pdf.setTextColor(15, 110, 86);
+      pdf.text("III. EXAMEN FÍSICO / SIGNOS VITALES", 14, y);
+      y += 6;
 
-    y += 5;
-    pdf.setDrawColor(220, 220, 220);
-    pdf.line(14, y, pageWidth - 14, y);
-    y += 8;
+      pdf.rect(14, y, pageWidth - 28, 12);
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(9);
+      
+      let xOffset = 16;
+      const vitales = [
+        { label: "Peso", val: consulta.signosVitales.peso ? `${consulta.signosVitales.peso} kg` : null },
+        { label: "Temp", val: consulta.signosVitales.temperatura ? `${consulta.signosVitales.temperatura} °C` : null },
+        { label: "FC", val: consulta.signosVitales.frecuenciaCardiaca ? `${consulta.signosVitales.frecuenciaCardiaca} lpm` : null },
+        { label: "FR", val: consulta.signosVitales.frecuenciaRespiratoria ? `${consulta.signosVitales.frecuenciaRespiratoria} rpm` : null },
+        { label: "CC", val: consulta.signosVitales.condicionCorporal ? `${consulta.signosVitales.condicionCorporal}/5` : null }
+      ].filter(v => v.val !== null);
 
-    // 4. Consultation date
-    const fechaText = new Date(consulta.fechaHora).toLocaleDateString('es-CO') + ' ' + new Date(consulta.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.setTextColor(15, 110, 86);
-    pdf.text("CONSULTA", 14, y);
-    y += 6;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9);
-    pdf.setTextColor(60, 60, 60);
-    pdf.text(`Fecha y Hora: ${fechaText}`, 14, y);
-    y += 10;
+      if (vitales.length > 0) {
+        vitales.forEach((v) => {
+          pdf.setFont("helvetica", "bold");
+          pdf.text(`${v.label}:`, xOffset, y + 7);
+          pdf.setFont("helvetica", "normal");
+          pdf.text(v.val!, xOffset + pdf.getTextWidth(`${v.label}: `), y + 7);
+          xOffset += 35;
+        });
+      } else {
+        pdf.text("No registrados en esta consulta.", 16, y + 7);
+      }
+      y += 20;
+    }
 
-    pdf.setDrawColor(220, 220, 220);
-    pdf.line(14, y, pageWidth - 14, y);
-    y += 8;
-
-    // 5. SOAP sections
+    // --- SECCIÓN IV: SOAP ---
     const soap = consulta.soap || { subjetivo: '', objetivo: '', analisis: '', plan: '' };
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(15, 110, 86);
+    pdf.text("IV. NOTA DE EVOLUCIÓN (SOAP)", 14, y);
+    y += 8;
+
     const soapSections = [
       { title: "SUBJETIVO (S)", text: soap.subjetivo },
       { title: "OBJETIVO (O)", text: soap.objetivo },
-      { title: "ANÁLISIS (A)", text: soap.analisis },
-      { title: "PLAN (P)", text: soap.plan }
+      { title: "ANÁLISIS (A)", text: soap.analisis }
     ];
     
     soapSections.forEach((section) => {
-      checkPage(18);
-      
+      checkPage(15);
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(10);
-      pdf.setTextColor(15, 110, 86);
+      pdf.setTextColor(60, 60, 60);
       pdf.text(section.title, 14, y);
-      y += 6;
+      y += 5;
       
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
-      pdf.setTextColor(60, 60, 60);
-      
-      const lines = pdf.splitTextToSize(section.text || "No reportado en la consulta", pageWidth - 28);
+      pdf.setTextColor(0, 0, 0);
+      const lines = pdf.splitTextToSize(section.text || "No registrado", pageWidth - 28);
       lines.forEach((line: string) => {
         checkPage(5);
         pdf.text(line, 14, y);
         y += 4.5;
       });
-      
-      y += 6;
+      y += 4;
     });
 
-    // 6. Receta section with border box
-    checkPage(25);
-    pdf.setDrawColor(15, 110, 86);
-    pdf.setLineWidth(0.5);
-    
-    const recetaY = y;
+    // --- SECCIÓN V: RECETA Y PLAN ---
+    checkPage(30);
     pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
+    pdf.setFontSize(11);
     pdf.setTextColor(15, 110, 86);
-    pdf.text("RECETA MÉDICA", 14, y);
-    y += 7;
-    
+    pdf.text("V. PLAN MÉDICO / RECETA", 14, y);
+    y += 6;
+
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9);
-    pdf.setTextColor(60, 60, 60);
+    pdf.setTextColor(0, 0, 0);
+    const planLines = pdf.splitTextToSize(soap.plan || "Sin plan médico registrado", pageWidth - 28);
+    planLines.forEach((line: string) => {
+      checkPage(5);
+      pdf.text(line, 14, y);
+      y += 4.5;
+    });
     
-    const planText = soap.plan || '';
-    const medLines = planText.split('\n')
-      .map(l => l.replace(/^[\s*\-•]+/, '').trim())
-      .filter(l => l.split('|').length >= 3);
-      
-    if (medLines.length > 0) {
-      medLines.forEach((medLine) => {
-        checkPage(6);
-        pdf.text(`• ${medLine}`, 16, y);
-        y += 5.5;
-      });
-    } else {
-      pdf.setFont("helvetica", "italic");
-      pdf.text("No se prescribieron medicamentos en esta consulta.", 16, y);
-      y += 5.5;
+    y += 15;
+
+    // --- FIRMA Y PIE DE PÁGINA ---
+    checkPage(40);
+    y += 20; // Space for signature
+    pdf.line(14, y, 80, y);
+    y += 5;
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`Dr(a). ${user.nombre}`, 14, y);
+    y += 4;
+    pdf.setFont("helvetica", "normal");
+    if (user.matriculaProfesional) {
+      pdf.text(`Matrícula Profesional: ${user.matriculaProfesional}`, 14, y);
     }
     
-    y += 3;
-    // Draw the box around the recipe
-    pdf.setDrawColor(15, 110, 86);
-    pdf.setLineWidth(0.3);
-    pdf.roundedRect(12, recetaY - 5, pageWidth - 24, y - recetaY + 5, 3, 3, 'S');
-    
-    // 7. Footers on all pages
+    // Page footers
     const pageCount = (pdf as any).internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       pdf.setPage(i);
       pdf.setDrawColor(220, 220, 220);
       pdf.line(14, 282, pageWidth - 14, 282);
       
-      pdf.setFont("helvetica", "normal");
+      pdf.setFont("helvetica", "italic");
       pdf.setFontSize(7);
       pdf.setTextColor(140, 140, 140);
-      pdf.text("Este documento fue generado digitalmente por VetIA", 14, 288);
-      pdf.text(`${new Date().toLocaleDateString('es-CO')} — Dr(a). ${user.nombre}`, pageWidth / 2, 288, { align: 'center' });
-      pdf.text(`Pág. ${i}/${pageCount}`, pageWidth - 14, 288, { align: 'right' });
+      pdf.text("Generado por VetIA - Software Clínico Veterinario", 14, 288);
+      pdf.text(`Impreso: ${new Date().toLocaleString('es-CO')}`, pageWidth / 2, 288, { align: 'center' });
+      pdf.text(`Página ${i} de ${pageCount}`, pageWidth - 14, 288, { align: 'right' });
     }
     
-    const filename = `consulta_${paciente.nombre.toLowerCase().replace(/\s/g, '_')}_${new Date(consulta.fechaHora).toISOString().slice(0, 10)}.pdf`;
+    const filename = `HC_${consulta.numeroHC || 'SF'}_${paciente.nombre.replace(/\s/g, '_')}.pdf`;
     pdf.save(filename);
   };
 
@@ -341,7 +394,7 @@ const DetalleConsulta: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Navigation */}
+      {/* Navigation & Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Link
@@ -352,9 +405,18 @@ const DetalleConsulta: React.FC = () => {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-extrabold text-slate-800">Consulta Médica</h1>
-            <p className="text-xs text-slate-500">
-              Paciente: <span className="font-bold text-slate-700">{paciente.nombre}</span>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-extrabold text-slate-800">
+                Historia Clínica {consulta.numeroHC && <span className="text-[#0F6E56]">#{consulta.numeroHC}</span>}
+              </h1>
+              {consulta.prioridad && (
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${PRIORIDAD_COLORS[consulta.prioridad]}`}>
+                  {PRIORIDAD_LABELS[consulta.prioridad]}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Paciente: <Link to={`/pacientes/${paciente.id}`} className="font-bold text-[#0F6E56] hover:underline">{paciente.nombre}</Link> • {new Date(consulta.fechaHora).toLocaleString('es-CO')}
             </p>
           </div>
         </div>
@@ -396,8 +458,53 @@ const DetalleConsulta: React.FC = () => {
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Audio and Transcription */}
+        {/* Left Column - Metadata, Vitals, Audio */}
         <div className="space-y-6 lg:col-span-1">
+          
+          {/* Motivo Card */}
+          {consulta.motivo && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-2">
+                <Stethoscope className="h-4 w-4 text-[#0F6E56]" />
+                Motivo de Consulta
+              </h3>
+              <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                {consulta.motivo}
+              </p>
+            </div>
+          )}
+
+          {/* Vitals Table */}
+          {consulta.signosVitales && Object.values(consulta.signosVitales).some(v => v) && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-2">
+                <Activity className="h-4 w-4 text-[#0F6E56]" />
+                Signos Vitales
+              </h3>
+              <div className="overflow-hidden rounded-xl border border-slate-100">
+                <table className="w-full text-xs text-left">
+                  <tbody className="divide-y divide-slate-100">
+                    {consulta.signosVitales.peso && (
+                      <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium w-1/2">Peso</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.peso} kg</td></tr>
+                    )}
+                    {consulta.signosVitales.temperatura && (
+                      <tr><th className="px-3 py-2 text-slate-500 font-medium">Temperatura</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.temperatura} °C</td></tr>
+                    )}
+                    {consulta.signosVitales.frecuenciaCardiaca && (
+                      <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium">F. Cardíaca</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.frecuenciaCardiaca} lpm</td></tr>
+                    )}
+                    {consulta.signosVitales.frecuenciaRespiratoria && (
+                      <tr><th className="px-3 py-2 text-slate-500 font-medium">F. Respiratoria</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.frecuenciaRespiratoria} rpm</td></tr>
+                    )}
+                    {consulta.signosVitales.condicionCorporal && (
+                      <tr className="bg-slate-50/50"><th className="px-3 py-2 text-slate-500 font-medium">Cond. Corporal</th><td className="px-3 py-2 font-bold text-slate-700">{consulta.signosVitales.condicionCorporal}/5</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Audio player card */}
           {consulta.audioUrl && (
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
@@ -405,7 +512,7 @@ const DetalleConsulta: React.FC = () => {
                 <FileAudio className="h-4 w-4 text-[#0F6E56]" />
                 Grabación de Audio
               </h3>
-              <audio src={consulta.audioUrl} controls className="w-full focus:outline-none" />
+              <audio src={consulta.audioUrl} controls className="w-full focus:outline-none h-10" />
             </div>
           )}
 
@@ -421,30 +528,6 @@ const DetalleConsulta: React.FC = () => {
               ) : (
                 <p className="text-xs italic text-slate-400">No hay transcripción disponible para esta consulta.</p>
               )}
-            </div>
-          </div>
-
-          {/* Consultation Metadata - no technical IDs */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-            <h3 className="font-bold text-slate-800 text-sm border-b border-slate-50 pb-2">Detalles del Registro</h3>
-            <div className="space-y-2.5 text-xs text-slate-500">
-              <div className="flex justify-between">
-                <span>Fecha y Hora</span>
-                <span className="font-semibold text-slate-700">
-                  {new Date(consulta.fechaHora).toLocaleDateString()} a las {new Date(consulta.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>Estado del Reporte</span>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                  consulta.estado === 'aprobada' ? 'bg-emerald-50 text-emerald-700' 
-                  : consulta.estado === 'procesando' ? 'bg-amber-50 text-amber-700'
-                  : consulta.estado === 'error' ? 'bg-red-50 text-red-700'
-                  : 'bg-slate-100 text-slate-600'
-                }`}>
-                  {consulta.estado === 'aprobada' ? 'Aprobada' : consulta.estado === 'procesando' ? 'Procesando' : consulta.estado === 'error' ? 'Error' : 'Borrador'}
-                </span>
-              </div>
             </div>
           </div>
         </div>
@@ -465,65 +548,62 @@ const DetalleConsulta: React.FC = () => {
             <>
               <SoapViewer soap={consulta.soap} onSave={consulta.estado === 'borrador' ? handleSaveSoap : undefined} />
               
-              {/* IA Suggestions */}
+              {/* IA Suggestions (Compact Table) */}
               {consulta.soap?.medicamentosSugeridos && consulta.soap.medicamentosSugeridos.length > 0 && (consulta.estado === 'borrador' || consulta.estado === 'aprobada') && (
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">
                   <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 border-b border-slate-50 pb-3">
                     <Sparkles className="h-4 w-4 text-[#0F6E56]" />
-                    Sugerencias de IA
+                    Medicamentos Sugeridos por IA
                   </h3>
                   
-                  <div className="flex items-start gap-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 p-4 rounded-xl">
-                    <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
-                    <span className="text-xs font-semibold text-amber-800">
-                      Estas son sugerencias generadas por IA. El veterinario debe validar antes de prescribir.
+                  <div className="flex items-start gap-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 p-3 rounded-xl">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                    <span className="text-xs font-medium text-amber-800">
+                      Sugerencias de IA. Validar antes de prescribir y agregar al plan.
                     </span>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {consulta.soap.medicamentosSugeridos.map((med, index) => (
-                      <div key={index} className="group bg-white hover:bg-slate-50/50 p-5 rounded-2xl border border-slate-100 hover:border-slate-200 flex flex-col justify-between transition-all hover:shadow-sm">
-                        <div>
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="h-10 w-10 rounded-xl bg-[#0F6E56]/10 flex items-center justify-center text-[#0F6E56] shrink-0">
-                              <Pill className="h-5 w-5" />
-                            </div>
-                            <h4 className="font-extrabold text-slate-800 text-base">{med.nombre}</h4>
-                          </div>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-3">
-                            <div>
-                              <span className="block text-[10px] font-bold text-slate-400 uppercase">Dosis</span>
-                              <span className="text-slate-600 font-medium">{med.dosis}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] font-bold text-slate-400 uppercase">Vía</span>
-                              <span className="text-slate-600 font-medium">{med.via}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] font-bold text-slate-400 uppercase">Frecuencia</span>
-                              <span className="text-slate-600 font-medium">{med.frecuencia}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] font-bold text-slate-400 uppercase">Duración</span>
-                              <span className="text-slate-600 font-medium">{med.duracion}</span>
-                            </div>
-                          </div>
-                          <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 p-3 rounded-xl leading-relaxed">
-                            <span className="font-bold text-slate-600 block mb-0.5">Indicación:</span>
-                            {med.indicacion}
-                          </div>
-                        </div>
-                        
-                        {consulta.estado === 'borrador' && (
-                          <button
-                            onClick={() => handleAddMedToPlan(med)}
-                            className="mt-4 w-full py-2.5 bg-[#0F6E56]/10 hover:bg-[#0F6E56] text-[#0F6E56] hover:text-white rounded-xl text-xs font-bold transition-all border border-[#0F6E56]/20"
-                          >
-                            Agregar al Plan
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto rounded-xl border border-slate-100">
+                    <table className="w-full text-xs text-left whitespace-nowrap">
+                      <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-3">Medicamento</th>
+                          <th className="px-4 py-3">Dosis</th>
+                          <th className="px-4 py-3">Vía</th>
+                          <th className="px-4 py-3">Frecuencia</th>
+                          <th className="px-4 py-3">Duración</th>
+                          {consulta.estado === 'borrador' && <th className="px-4 py-3 text-center">Acción</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {consulta.soap.medicamentosSugeridos.map((med, index) => (
+                          <tr key={index} className="hover:bg-slate-50/50 transition-colors group">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <Pill className="h-3 w-3 text-[#0F6E56]" />
+                                <span className="font-bold text-slate-700">{med.nombre}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[200px]" title={med.indicacion}>{med.indicacion}</div>
+                            </td>
+                            <td className="px-4 py-3 font-medium text-slate-600">{med.dosis}</td>
+                            <td className="px-4 py-3 text-slate-600">{med.via}</td>
+                            <td className="px-4 py-3 text-slate-600">{med.frecuencia}</td>
+                            <td className="px-4 py-3 text-slate-600">{med.duracion}</td>
+                            {consulta.estado === 'borrador' && (
+                              <td className="px-4 py-3 text-center">
+                                <button
+                                  onClick={() => handleAddMedToPlan(med)}
+                                  className="p-1.5 bg-[#0F6E56]/10 text-[#0F6E56] hover:bg-[#0F6E56] hover:text-white rounded-lg transition-colors"
+                                  title="Agregar al Plan"
+                                >
+                                  <FilePlus className="h-4 w-4" />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

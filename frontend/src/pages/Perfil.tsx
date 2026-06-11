@@ -1,12 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../services/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { Phone, User, Mail, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Phone, User, Mail, Save, CheckCircle, AlertCircle, MapPin, Building2, IdCard, MessageCircle } from 'lucide-react';
+
+interface VetFields {
+  telefono: string;
+  whatsapp: string;
+  ciudad: string;
+  sede: string;
+  veterinaria: string;
+  matriculaProfesional: string;
+}
 
 const Perfil: React.FC = () => {
   const { user } = useAuth();
-  const [telefono, setTelefono] = useState('');
+  const [fields, setFields] = useState<VetFields>({
+    telefono: '',
+    whatsapp: '',
+    ciudad: '',
+    sede: '',
+    veterinaria: '',
+    matriculaProfesional: '',
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -19,7 +35,14 @@ const Perfil: React.FC = () => {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setTelefono(data.telefono || '');
+          setFields({
+            telefono: data.telefono || '',
+            whatsapp: data.whatsapp || '',
+            ciudad: data.ciudad || '',
+            sede: data.sede || '',
+            veterinaria: data.veterinaria || '',
+            matriculaProfesional: data.matriculaProfesional || '',
+          });
         }
       } catch (error) {
         console.error('Error fetching veterinarian data:', error);
@@ -27,20 +50,28 @@ const Perfil: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchVetData();
   }, [user]);
+
+  const handleChange = (field: keyof VetFields, value: string) => {
+    setFields((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
     setStatus(null);
-
     try {
       const docRef = doc(db, 'veterinarios', user.uid);
-      await updateDoc(docRef, { telefono });
-      setStatus({ type: 'success', message: '¡Cambios guardados con éxito!' });
+      await setDoc(docRef, {
+        uid: user.uid,
+        nombre: user.nombre,
+        email: user.email,
+        foto: user.foto || null,
+        ...fields,
+      }, { merge: true });
+      setStatus({ type: 'success', message: '¡Perfil actualizado con éxito!' });
     } catch (error: any) {
       console.error('Error saving veterinarian changes:', error);
       setStatus({ type: 'error', message: error.message || 'Error al guardar los cambios.' });
@@ -94,6 +125,9 @@ const Perfil: React.FC = () => {
             <div className="text-center sm:text-left pb-1">
               <h1 className="text-2xl font-extrabold text-slate-800">{user.nombre}</h1>
               <p className="text-sm font-semibold text-[#0F6E56]">Médico Veterinario</p>
+              {fields.matriculaProfesional && (
+                <p className="text-xs text-slate-400 mt-0.5">Mat. Prof. {fields.matriculaProfesional}</p>
+              )}
             </div>
           </div>
 
@@ -107,54 +141,83 @@ const Perfil: React.FC = () => {
           )}
 
           <form onSubmit={handleSave} className="space-y-6">
-            <div className="grid grid-cols-1 gap-6">
-              {/* Nombre Completo */}
+            {/* Read-only identity */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre Completo</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <User className="h-4 w-4" />
                   </div>
-                  <input
-                    type="text"
-                    value={user.nombre}
-                    disabled
-                    className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed outline-none"
-                  />
+                  <input type="text" value={user.nombre} disabled
+                    className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed outline-none" />
                 </div>
               </div>
-
-              {/* Email */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Correo Electrónico</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Mail className="h-4 w-4" />
                   </div>
-                  <input
-                    type="email"
-                    value={user.email}
-                    disabled
-                    className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed outline-none"
-                  />
+                  <input type="email" value={user.email} disabled
+                    className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed outline-none" />
                 </div>
               </div>
+            </div>
 
-              {/* Teléfono */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Teléfono de Contacto</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Phone className="h-4 w-4" />
+            {/* Divider */}
+            <div className="border-t border-slate-100 pt-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Información de Contacto</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {[
+                  { field: 'telefono', label: 'Teléfono', Icon: Phone, placeholder: '+57 300 123 4567', type: 'tel' },
+                  { field: 'whatsapp', label: 'WhatsApp', Icon: MessageCircle, placeholder: '+57 300 123 4567', type: 'tel' },
+                ].map(({ field, label, Icon, placeholder, type }) => (
+                  <div key={field}>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <input
+                        type={type}
+                        placeholder={placeholder}
+                        value={(fields as any)[field]}
+                        onChange={(e) => handleChange(field as keyof VetFields, e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] outline-none transition-shadow"
+                      />
+                    </div>
                   </div>
-                  <input
-                    type="tel"
-                    placeholder="Ej. +57 300 123 4567"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] outline-none transition-shadow"
-                  />
-                </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Clinical Info */}
+            <div className="border-t border-slate-100 pt-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Información Clínica</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {[
+                  { field: 'veterinaria', label: 'Nombre de la Clínica / Veterinaria', Icon: Building2, placeholder: 'Ej. Clínica Veterinaria Amigos', type: 'text' },
+                  { field: 'sede', label: 'Sede / Sucursal', Icon: Building2, placeholder: 'Ej. Sede Norte', type: 'text' },
+                  { field: 'ciudad', label: 'Ciudad', Icon: MapPin, placeholder: 'Ej. Bogotá', type: 'text' },
+                  { field: 'matriculaProfesional', label: 'Matrícula Profesional', Icon: IdCard, placeholder: 'Ej. 12345-COL', type: 'text' },
+                ].map(({ field, label, Icon, placeholder, type }) => (
+                  <div key={field}>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{label}</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <input
+                        type={type}
+                        placeholder={placeholder}
+                        value={(fields as any)[field]}
+                        onChange={(e) => handleChange(field as keyof VetFields, e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] outline-none transition-shadow"
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -164,7 +227,7 @@ const Perfil: React.FC = () => {
                 disabled={saving}
                 className="flex items-center gap-2 rounded-xl bg-[#0F6E56] hover:bg-[#0c5945] px-5 py-3 text-sm font-bold text-white shadow-md shadow-[#0F6E56]/10 transition-all disabled:opacity-50"
               >
-                <Save className="h-4.5 w-4.5" />
+                <Save className="h-4 w-4" />
                 {saving ? 'Guardando cambios...' : 'Guardar cambios'}
               </button>
             </div>

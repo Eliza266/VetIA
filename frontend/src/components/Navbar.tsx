@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LogOut, User, Menu, X, PlusCircle, LayoutDashboard, Users, Calendar } from 'lucide-react';
+import { LogOut, User, Menu, X, PlusCircle, LayoutDashboard, Users, Calendar, Activity } from 'lucide-react';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -69,6 +69,17 @@ const Navbar: React.FC = () => {
                 >
                   <Calendar className="h-4 w-4" />
                   Agenda
+                </Link>
+                <Link
+                  to="/brigadas"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive('/brigadas')
+                      ? 'bg-[#0F6E56]/10 text-[#0F6E56]' 
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Activity className="h-4 w-4" />
+                  Brigadas
                 </Link>
                 <Link
                   to="/pacientes/nuevo"
@@ -174,6 +185,18 @@ const Navbar: React.FC = () => {
           >
             <Calendar className="h-5 w-5" />
             Agenda
+          </Link>
+          <Link
+            to="/brigadas"
+            onClick={() => setIsOpen(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-base font-medium ${
+              isActive('/brigadas') 
+                ? 'bg-[#0F6E56]/10 text-[#0F6E56]' 
+                : 'text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Activity className="h-5 w-5" />
+            Brigadas
           </Link>
           <Link
             to="/pacientes/nuevo"

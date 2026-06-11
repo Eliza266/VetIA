@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { usePacientes } from '../hooks/usePacientes';
+import { useAuth } from '../hooks/useAuth';
+import { storage } from '../services/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { Paciente, Propietario } from '../types';
 import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
 
 const NuevosPaciente: React.FC = () => {
-  const { agregarPaciente, error: apiError } = usePacientes();
+  const { agregarPaciente, actualizarPaciente, error: apiError } = usePacientes();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -16,10 +20,16 @@ const NuevosPaciente: React.FC = () => {
     sexo: 'macho' as Paciente['sexo'],
     estadoReproductivo: 'entero' as Paciente['estadoReproductivo'],
     notasGenerales: '',
+    color: '',
+    chip: '',
     propietarioNombre: '',
     propietarioTelefono: '',
+    propietarioWhatsapp: '',
     propietarioEmail: '',
   });
+
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +40,14 @@ const NuevosPaciente: React.FC = () => {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFotoFile(file);
+      setFotoPreview(URL.createObjectURL(file));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,6 +74,7 @@ const NuevosPaciente: React.FC = () => {
       nombre: form.propietarioNombre.trim(),
       telefono: form.propietarioTelefono.trim(),
       email: form.propietarioEmail.trim() || undefined,
+      whatsapp: form.propietarioWhatsapp.trim() || undefined,
     };
 
     const nuevoPaciente: Omit<Paciente, 'veterinarioId' | 'creadoEn'> = {
@@ -67,11 +86,20 @@ const NuevosPaciente: React.FC = () => {
       estadoReproductivo: form.estadoReproductivo,
       propietario,
       notasGenerales: form.notasGenerales.trim() || undefined,
+      color: form.color.trim() || undefined,
+      chip: form.chip.trim() || undefined,
     };
 
     try {
       const docId = await agregarPaciente(nuevoPaciente);
       if (docId) {
+        if (fotoFile && user) {
+          const fotoPath = `fotos-pacientes/${user.uid}/${docId}`;
+          const storageRef = ref(storage, fotoPath);
+          const uploadResult = await uploadBytes(storageRef, fotoFile);
+          const fotoUrl = await getDownloadURL(uploadResult.ref);
+          await actualizarPaciente(docId, { foto: fotoUrl });
+        }
         navigate(`/pacientes/${docId}`);
       } else {
         setFormError('No se pudo guardar el paciente. Verifica tu conexión.');
@@ -119,6 +147,29 @@ const NuevosPaciente: React.FC = () => {
           </h2>
 
           <div className="space-y-4">
+            {/* Photo upload */}
+            <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="h-16 w-16 rounded-full bg-[#0F6E56]/5 border border-[#0F6E56]/10 flex items-center justify-center overflow-hidden shrink-0">
+                {fotoPreview ? (
+                  <img src={fotoPreview} alt="Mascota" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-2xl">📸</span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <span className="block text-xs font-bold text-slate-700">Foto del Paciente</span>
+                <label className="inline-block px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 text-[11px] font-bold rounded-lg cursor-pointer transition-all">
+                  Subir Imagen
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFotoChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+
             <div>
               <label htmlFor="nombre" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                 Nombre de la Mascota <span className="text-red-500">*</span>
@@ -166,6 +217,38 @@ const NuevosPaciente: React.FC = () => {
                   value={form.raza}
                   onChange={handleChange}
                   placeholder="Ej. Golden, Mestizo"
+                  className="w-full px-3.5 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] focus:bg-white outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="color" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Color / Pelaje
+                </label>
+                <input
+                  type="text"
+                  id="color"
+                  name="color"
+                  value={form.color}
+                  onChange={handleChange}
+                  placeholder="Ej. Blanco y negro, Atigrado"
+                  className="w-full px-3.5 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] focus:bg-white outline-none transition-all"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="chip" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  N° de Chip (Opcional)
+                </label>
+                <input
+                  type="text"
+                  id="chip"
+                  name="chip"
+                  value={form.chip}
+                  onChange={handleChange}
+                  placeholder="Ej. 981020000..."
                   className="w-full px-3.5 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] focus:bg-white outline-none transition-all"
                 />
               </div>
@@ -262,20 +345,37 @@ const NuevosPaciente: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label htmlFor="propietarioTelefono" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Teléfono de Contacto <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  id="propietarioTelefono"
-                  name="propietarioTelefono"
-                  value={form.propietarioTelefono}
-                  onChange={handleChange}
-                  placeholder="Ej. +52 55 1234 5678"
-                  className="w-full px-3.5 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] focus:bg-white outline-none transition-all"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="propietarioTelefono" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Teléfono <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    id="propietarioTelefono"
+                    name="propietarioTelefono"
+                    value={form.propietarioTelefono}
+                    onChange={handleChange}
+                    placeholder="Ej. 3001234567"
+                    className="w-full px-3.5 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] focus:bg-white outline-none transition-all"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="propietarioWhatsapp" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    WhatsApp (Opcional)
+                  </label>
+                  <input
+                    type="tel"
+                    id="propietarioWhatsapp"
+                    name="propietarioWhatsapp"
+                    value={form.propietarioWhatsapp}
+                    onChange={handleChange}
+                    placeholder="Ej. 3001234567"
+                    className="w-full px-3.5 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:border-[#0F6E56] focus:ring-1 focus:ring-[#0F6E56] focus:bg-white outline-none transition-all"
+                  />
+                </div>
               </div>
 
               <div>

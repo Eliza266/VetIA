@@ -12,6 +12,7 @@ import NuevaConsulta from './pages/NuevaConsulta';
 import DetalleConsulta from './pages/DetalleConsulta';
 import Perfil from './pages/Perfil';
 import Agenda from './pages/Agenda';
+import Brigadas from './pages/Brigadas';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
               <Route path="/pacientes/:pacienteId/consultas/:consultaId" element={<DetalleConsulta />} />
               <Route path="/perfil" element={<Perfil />} />
               <Route path="/agenda" element={<Agenda />} />
+              <Route path="/brigadas" element={<Brigadas />} />
             </Route>
           </Route>
         </Routes>

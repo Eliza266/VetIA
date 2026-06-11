@@ -37,15 +37,7 @@ export const usePacientes = () => {
         const data = doc.data();
         list.push({
           id: doc.id,
-          nombre: data.nombre,
-          especie: data.especie,
-          raza: data.raza,
-          fechaNacimiento: data.fechaNacimiento,
-          sexo: data.sexo,
-          estadoReproductivo: data.estadoReproductivo,
-          propietario: data.propietario,
-          notasGenerales: data.notasGenerales,
-          veterinarioId: data.veterinarioId,
+          ...data,
           creadoEn: data.creadoEn?.toDate ? data.creadoEn.toDate() : new Date(data.creadoEn)
         } as Paciente);
       });
@@ -82,15 +74,7 @@ export const usePacientes = () => {
 
         return {
           id: docSnap.id,
-          nombre: data.nombre,
-          especie: data.especie,
-          raza: data.raza,
-          fechaNacimiento: data.fechaNacimiento,
-          sexo: data.sexo,
-          estadoReproductivo: data.estadoReproductivo,
-          propietario: data.propietario,
-          notasGenerales: data.notasGenerales,
-          veterinarioId: data.veterinarioId,
+          ...data,
           creadoEn: data.creadoEn?.toDate ? data.creadoEn.toDate() : new Date(data.creadoEn)
         } as Paciente;
       }
@@ -110,30 +94,10 @@ export const usePacientes = () => {
     setError(null);
     try {
       const pacienteDoc: Omit<Paciente, 'id'> = {
-        nombre: nuevoPaciente.nombre,
-        especie: nuevoPaciente.especie,
-        sexo: nuevoPaciente.sexo,
-        estadoReproductivo: nuevoPaciente.estadoReproductivo,
-        propietario: {
-          nombre: nuevoPaciente.propietario.nombre,
-          telefono: nuevoPaciente.propietario.telefono,
-        },
+        ...nuevoPaciente,
         veterinarioId: user.uid,
         creadoEn: new Date()
       };
-
-      if (nuevoPaciente.propietario.email) {
-        pacienteDoc.propietario.email = nuevoPaciente.propietario.email;
-      }
-      if (nuevoPaciente.raza) {
-        pacienteDoc.raza = nuevoPaciente.raza;
-      }
-      if (nuevoPaciente.fechaNacimiento) {
-        pacienteDoc.fechaNacimiento = nuevoPaciente.fechaNacimiento;
-      }
-      if (nuevoPaciente.notasGenerales) {
-        pacienteDoc.notasGenerales = nuevoPaciente.notasGenerales;
-      }
       
       const docRef = await addDoc(collection(db, 'pacientes'), pacienteDoc);
       await fetchPacientes(); // Refresh list

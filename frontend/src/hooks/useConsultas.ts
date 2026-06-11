@@ -12,6 +12,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage } from '../services/firebase';
 import { useAuth } from './useAuth';
 import type { Consulta } from '../types';
@@ -42,13 +43,8 @@ export const useConsultas = () => {
         const data = doc.data();
         list.push({
           id: doc.id,
-          pacienteId: data.pacienteId,
-          veterinarioId: data.veterinarioId,
+          ...data,
           fechaHora: data.fechaHora?.toDate ? data.fechaHora.toDate() : new Date(data.fechaHora),
-          audioUrl: data.audioUrl,
-          transcripcion: data.transcripcion,
-          soap: data.soap,
-          estado: data.estado,
           creadoEn: data.creadoEn?.toDate ? data.creadoEn.toDate() : new Date(data.creadoEn)
         } as Consulta);
       });
@@ -80,13 +76,8 @@ export const useConsultas = () => {
         const data = doc.data();
         list.push({
           id: doc.id,
-          pacienteId: data.pacienteId,
-          veterinarioId: data.veterinarioId,
+          ...data,
           fechaHora: data.fechaHora?.toDate ? data.fechaHora.toDate() : new Date(data.fechaHora),
-          audioUrl: data.audioUrl,
-          transcripcion: data.transcripcion,
-          soap: data.soap,
-          estado: data.estado,
           creadoEn: data.creadoEn?.toDate ? data.creadoEn.toDate() : new Date(data.creadoEn)
         } as Consulta);
       });
@@ -116,13 +107,8 @@ export const useConsultas = () => {
 
         return {
           id: docSnap.id,
-          pacienteId: data.pacienteId,
-          veterinarioId: data.veterinarioId,
+          ...data,
           fechaHora: data.fechaHora?.toDate ? data.fechaHora.toDate() : new Date(data.fechaHora),
-          audioUrl: data.audioUrl,
-          transcripcion: data.transcripcion,
-          soap: data.soap,
-          estado: data.estado,
           creadoEn: data.creadoEn?.toDate ? data.creadoEn.toDate() : new Date(data.creadoEn)
         } as Consulta;
       }
@@ -141,6 +127,16 @@ export const useConsultas = () => {
     }
     setError(null);
     try {
+      let numeroHC = '';
+      try {
+        const functions = getFunctions();
+        const generarHC = httpsCallable(functions, 'generarNumeroHC');
+        const resultado = await generarHC({});
+        numeroHC = (resultado.data as any).numeroHC;
+      } catch (hcErr) {
+        console.error('Error al generar número HC por Cloud Function:', hcErr);
+      }
+
       const nuevaConsulta: Omit<Consulta, 'id'> = {
         pacienteId,
         veterinarioId: user.uid,
@@ -148,6 +144,10 @@ export const useConsultas = () => {
         estado: 'borrador',
         creadoEn: new Date()
       };
+
+      if (numeroHC) {
+        nuevaConsulta.numeroHC = numeroHC;
+      }
 
       const docRef = await addDoc(collection(db, 'consultas'), nuevaConsulta);
       return docRef.id;
@@ -163,6 +163,32 @@ export const useConsultas = () => {
     try {
       const docRef = doc(db, 'consultas', id);
       await updateDoc(docRef, campos);
+
+      // If the consultation is approved, update the patient's last weight/height from signsVitales
+      if (campos.estado === 'aprobada') {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const consData = docSnap.data();
+          const { pacienteId, signosVitales } = consData;
+          if (pacienteId && signosVitales) {
+            const updates: any = {};
+            if (signosVitales.peso !== undefined) {
+              updates.ultimoPeso = Number(signosVitales.peso);
+            }
+            if (signosVitales.talla !== undefined) {
+              updates.ultimaTalla = Number(signosVitales.talla);
+            } else if (signosVitales.altura !== undefined) {
+              updates.ultimaTalla = Number(signosVitales.altura);
+            }
+
+            if (Object.keys(updates).length > 0) {
+              const pacDocRef = doc(db, 'pacientes', pacienteId);
+              await updateDoc(pacDocRef, updates);
+            }
+          }
+        }
+      }
+
       return true;
     } catch (err: any) {
       console.error('Error updating consultation:', err);
@@ -183,6 +209,7 @@ export const useConsultas = () => {
       return false;
     }
   };
+
   /**
    * Process recorded audio: Uploads to Firebase storage, transcribes with Whisper, and structures SOAP with Gemini.
    */
