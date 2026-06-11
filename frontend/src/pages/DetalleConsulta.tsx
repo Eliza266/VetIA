@@ -486,7 +486,7 @@ const DetalleConsulta: React.FC = () => {
         nombrePropietario: paciente.propietario.nombre,
         nombrePaciente: paciente.nombre,
         pdfUrl: urlPdf,
-        nombreVet: user?.displayName || user?.nombre
+        nombreVet: perfilVet?.nombre || user?.nombre || 'Veterinario'
       });
       alert('¡Correo enviado exitosamente!');
     } catch (err) {
